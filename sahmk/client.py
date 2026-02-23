@@ -16,9 +16,10 @@ WS_URL = "wss://app.sahmk.sa/ws/v1/stocks/"
 class SahmkError(Exception):
     """Base exception for SAHMK API errors."""
 
-    def __init__(self, message, status_code=None, response=None):
+    def __init__(self, message, status_code=None, error_code=None, response=None):
         super().__init__(message)
         self.status_code = status_code
+        self.error_code = error_code
         self.response = response
 
 
@@ -29,7 +30,7 @@ class SahmkClient:
     Usage:
         client = SahmkClient("your_api_key")
         quote = client.quote("2222")
-        print(quote["last_price"])
+        print(quote["price"])
     """
 
     def __init__(self, api_key, base_url=None, timeout=30):
@@ -37,7 +38,7 @@ class SahmkClient:
         Initialize the client.
 
         Args:
-            api_key: Your SAHMK API key (starts with shmk_live_)
+            api_key: Your SAHMK API key (starts with shmk_live_ or shmk_test_)
             base_url: Override the default API base URL
             timeout: Request timeout in seconds (default: 30)
         """
@@ -61,17 +62,23 @@ class SahmkClient:
             raise SahmkError(
                 "Rate limit exceeded. Check X-RateLimit-Remaining header.",
                 status_code=429,
+                error_code="RATE_LIMIT",
                 response=response,
             )
 
         if response.status_code != 200:
             try:
-                detail = response.json().get("detail", response.text)
+                body = response.json()
+                err = body.get("error", {})
+                code = err.get("code", "UNKNOWN")
+                message = err.get("message", response.text)
             except (ValueError, KeyError):
-                detail = response.text
+                code = "UNKNOWN"
+                message = response.text
             raise SahmkError(
-                f"API error {response.status_code}: {detail}",
+                f"API error {response.status_code}: {message}",
                 status_code=response.status_code,
+                error_code=code,
                 response=response,
             )
 
@@ -83,25 +90,26 @@ class SahmkClient:
 
     def quote(self, symbol):
         """
-        Get a real-time stock quote.
+        Get a stock quote.
 
         Args:
             symbol: Stock symbol (e.g., "2222" for Aramco)
 
         Returns:
-            dict with keys like name, last_price, change, change_pct, volume, etc.
+            dict with keys: symbol, name, name_en, price, change,
+            change_percent, volume, bid, ask, liquidity, etc.
         """
         return self._request("GET", f"/quote/{symbol}/")
 
     def quotes(self, symbols):
         """
-        Get batch quotes for multiple stocks.
+        Get batch quotes for multiple stocks (Starter+ plan).
 
         Args:
             symbols: List of stock symbols (up to 50)
 
         Returns:
-            list of quote dicts
+            dict with "quotes" list and "count"
         """
         if len(symbols) > 50:
             raise SahmkError("Maximum 50 symbols per batch request")
@@ -113,26 +121,26 @@ class SahmkClient:
     # Historical
     # -------------------------------------------------------------------------
 
-    def historical(self, symbol, period=None, start_date=None, end_date=None):
+    def historical(self, symbol, from_date=None, to_date=None, interval=None):
         """
-        Get historical price data.
+        Get historical OHLCV data (Starter+ plan).
 
         Args:
             symbol: Stock symbol
-            period: Shortcut — "1m", "3m", "6m", "1y", "5y"
-            start_date: Start date (YYYY-MM-DD)
-            end_date: End date (YYYY-MM-DD)
+            from_date: Start date YYYY-MM-DD (default: 30 days ago)
+            to_date: End date YYYY-MM-DD (default: today)
+            interval: "1d", "1w", or "1m" (default: "1d")
 
         Returns:
-            list of OHLCV records
+            dict with "symbol", "interval", "from", "to", "count", and "data" list
         """
         params = {}
-        if period:
-            params["period"] = period
-        if start_date:
-            params["start_date"] = start_date
-        if end_date:
-            params["end_date"] = end_date
+        if from_date:
+            params["from"] = from_date
+        if to_date:
+            params["to"] = to_date
+        if interval:
+            params["interval"] = interval
         return self._request("GET", f"/historical/{symbol}/", params=params)
 
     # -------------------------------------------------------------------------
@@ -140,27 +148,76 @@ class SahmkClient:
     # -------------------------------------------------------------------------
 
     def market_summary(self):
-        """Get market overview (TASI index, change, volume)."""
+        """Get market overview (TASI index, change, volume, market_mood)."""
         return self._request("GET", "/market/summary/")
 
-    def gainers(self):
-        """Get top gaining stocks."""
-        return self._request("GET", "/market/gainers/")
+    def gainers(self, limit=None):
+        """
+        Get top gaining stocks.
 
-    def losers(self):
-        """Get top losing stocks."""
-        return self._request("GET", "/market/losers/")
+        Args:
+            limit: Number of results (default: 10, max: 50)
 
-    def volume_leaders(self):
-        """Get stocks with highest volume."""
-        return self._request("GET", "/market/volume/")
+        Returns:
+            dict with "gainers" list and "count"
+        """
+        params = {}
+        if limit is not None:
+            params["limit"] = limit
+        return self._request("GET", "/market/gainers/", params=params or None)
 
-    def value_leaders(self):
-        """Get stocks with highest traded value."""
-        return self._request("GET", "/market/value/")
+    def losers(self, limit=None):
+        """
+        Get top losing stocks.
+
+        Args:
+            limit: Number of results (default: 10, max: 50)
+
+        Returns:
+            dict with "losers" list and "count"
+        """
+        params = {}
+        if limit is not None:
+            params["limit"] = limit
+        return self._request("GET", "/market/losers/", params=params or None)
+
+    def volume_leaders(self, limit=None):
+        """
+        Get stocks with highest trading volume.
+
+        Args:
+            limit: Number of results (default: 10, max: 50)
+
+        Returns:
+            dict with "stocks" list and "count"
+        """
+        params = {}
+        if limit is not None:
+            params["limit"] = limit
+        return self._request("GET", "/market/volume/", params=params or None)
+
+    def value_leaders(self, limit=None):
+        """
+        Get stocks with highest trading value (SAR).
+
+        Args:
+            limit: Number of results (default: 10, max: 50)
+
+        Returns:
+            dict with "stocks" list and "count"
+        """
+        params = {}
+        if limit is not None:
+            params["limit"] = limit
+        return self._request("GET", "/market/value/", params=params or None)
 
     def sectors(self):
-        """Get sector performance."""
+        """
+        Get sector performance.
+
+        Returns:
+            dict with "sectors" list and "count"
+        """
         return self._request("GET", "/market/sectors/")
 
     # -------------------------------------------------------------------------
@@ -168,49 +225,61 @@ class SahmkClient:
     # -------------------------------------------------------------------------
 
     def company(self, symbol):
-        """Get company info (name, sector, description, etc.)."""
+        """
+        Get company info. Response varies by plan:
+        Free (basic), Starter (fundamentals), Pro (technicals, valuation, analysts).
+        """
         return self._request("GET", f"/company/{symbol}/")
 
     def financials(self, symbol):
-        """Get financial statements (income, balance sheet, cash flow)."""
+        """Get financial statements (income, balance sheet, cash flow). Starter+ plan."""
         return self._request("GET", f"/financials/{symbol}/")
 
     def dividends(self, symbol):
-        """Get dividend history."""
+        """Get dividend history and yield. Starter+ plan."""
         return self._request("GET", f"/dividends/{symbol}/")
 
     # -------------------------------------------------------------------------
     # Events
     # -------------------------------------------------------------------------
 
-    def events(self, symbol=None):
+    def events(self, symbol=None, limit=None):
         """
-        Get market events (earnings, dividends, IPOs).
+        Get AI-generated stock event summaries (Pro+ plan).
 
         Args:
             symbol: Optional — filter events for a specific stock
+            limit: Number of results (default: 20)
+
+        Returns:
+            dict with "events" list, "count", and "available_types"
         """
         params = {}
         if symbol:
             params["symbol"] = symbol
-        return self._request("GET", "/events/", params=params)
+        if limit is not None:
+            params["limit"] = limit
+        return self._request("GET", "/events/", params=params or None)
 
     # -------------------------------------------------------------------------
-    # WebSocket Streaming (Pro plan required)
+    # WebSocket Streaming (Pro+ plan)
     # -------------------------------------------------------------------------
 
-    async def stream(self, symbols, on_quote=None, on_error=None):
+    async def stream(self, symbols, on_quote=None, on_error=None, ping_interval=30):
         """
-        Stream real-time quotes via WebSocket (Pro plan required).
+        Stream real-time quotes via WebSocket (Pro+ plan).
 
         Args:
-            symbols: List of stock symbols to subscribe to
-            on_quote: Async callback for quote updates — on_quote(data)
-            on_error: Async callback for errors — on_error(error_data)
+            symbols: List of stock symbols to subscribe to (max 20 per call,
+                     max 60 per connection on Pro, 200 on Enterprise)
+            on_quote: Async callback — on_quote(data) where data contains
+                      symbol, timestamp, and quote fields (price, change, etc.)
+            on_error: Async callback — on_error(error_data)
+            ping_interval: Seconds between keep-alive pings (default: 30)
 
         Usage:
             async def handle_quote(data):
-                print(f"{data['symbol']}: {data['last_price']}")
+                print(f"{data['symbol']}: {data['data']['price']}")
 
             await client.stream(["2222", "1120"], on_quote=handle_quote)
         """
@@ -222,19 +291,19 @@ class SahmkClient:
                 "Install it with: pip install websockets"
             )
 
+        import asyncio
+
         url = f"{WS_URL}?api_key={self.api_key}"
 
         async with websockets.connect(url) as ws:
-            # Wait for connected message
             msg = json.loads(await ws.recv())
             if msg.get("type") == "error":
                 raise SahmkError(f"WebSocket error: {msg.get('message')}")
 
-            # Subscribe to symbols (max 20 per call)
             for i in range(0, len(symbols), 20):
                 batch = symbols[i : i + 20]
                 await ws.send(
-                    json.dumps({"type": "subscribe", "symbols": batch})
+                    json.dumps({"action": "subscribe", "symbols": batch})
                 )
                 ack = json.loads(await ws.recv())
                 if ack.get("type") == "error":
@@ -242,13 +311,24 @@ class SahmkClient:
                         f"Subscribe error: {ack.get('message')}"
                     )
 
-            # Listen for updates
-            async for message in ws:
-                data = json.loads(message)
+            async def _ping_loop():
+                while True:
+                    await asyncio.sleep(ping_interval)
+                    try:
+                        await ws.send(json.dumps({"action": "ping"}))
+                    except Exception:
+                        break
 
-                if data.get("type") == "quote" and on_quote:
-                    await on_quote(data.get("data", data))
-                elif data.get("type") == "error" and on_error:
-                    await on_error(data)
-                elif data.get("type") == "ping":
-                    await ws.send(json.dumps({"type": "pong"}))
+            ping_task = asyncio.create_task(_ping_loop())
+
+            try:
+                async for message in ws:
+                    data = json.loads(message)
+                    msg_type = data.get("type")
+
+                    if msg_type == "quote" and on_quote:
+                        await on_quote(data)
+                    elif msg_type == "error" and on_error:
+                        await on_error(data)
+            finally:
+                ping_task.cancel()

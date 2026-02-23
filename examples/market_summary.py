@@ -20,25 +20,27 @@ client = SahmkClient(API_KEY)
 summary = client.market_summary()
 print("=== Market Summary ===")
 print(f"TASI: {summary.get('index_value', 'N/A')}")
-print(f"Change: {summary.get('index_change', 'N/A')} ({summary.get('index_change_pct', 'N/A')})")
+print(f"Change: {summary.get('index_change', 'N/A')} ({summary.get('index_change_percent', 'N/A')}%)")
+print(f"Volume: {summary.get('total_volume', 'N/A')}")
+print(f"Mood: {summary.get('market_mood', 'N/A')}")
 print()
 
 # Top gainers
 print("=== Top Gainers ===")
-gainers = client.gainers()
-for stock in gainers[:5]:
-    print(f"  {stock['symbol']} {stock['name']}: {stock.get('change_pct', 'N/A')}")
+result = client.gainers(limit=5)
+for stock in result["gainers"]:
+    print(f"  {stock['symbol']} {stock.get('name_en', '')}: +{stock.get('change_percent', 'N/A')}%")
 print()
 
 # Top losers
 print("=== Top Losers ===")
-losers = client.losers()
-for stock in losers[:5]:
-    print(f"  {stock['symbol']} {stock['name']}: {stock.get('change_pct', 'N/A')}")
+result = client.losers(limit=5)
+for stock in result["losers"]:
+    print(f"  {stock['symbol']} {stock.get('name_en', '')}: {stock.get('change_percent', 'N/A')}%")
 print()
 
 # Volume leaders
 print("=== Volume Leaders ===")
-volume = client.volume_leaders()
-for stock in volume[:5]:
-    print(f"  {stock['symbol']} {stock['name']}: {stock.get('volume', 'N/A')}")
+result = client.volume_leaders(limit=5)
+for stock in result["stocks"]:
+    print(f"  {stock['symbol']} {stock.get('name_en', '')}: {stock.get('volume', 'N/A')}")
