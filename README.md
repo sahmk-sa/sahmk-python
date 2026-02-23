@@ -4,13 +4,15 @@ A lightweight Python client for the [SAHMK Developer API](https://sahmk.sa/devel
 
 ## Features
 
-- **Real-time quotes** — live prices for 200+ Tadawul stocks
+- **Real-time quotes** — live prices for 350+ Tadawul stocks
 - **Batch quotes** — up to 50 stocks in a single request
-- **Historical data** — daily OHLCV data with custom date ranges
-- **Market overview** — index, gainers, losers, volume leaders
-- **Company financials** — income statements, balance sheets
-- **Dividends** — historical dividend data
-- **WebSocket streaming** — real-time price updates pushed to you (Pro plan)
+- **Historical data** — daily/weekly/monthly OHLCV with custom date ranges
+- **Market overview** — TASI index, gainers, losers, volume/value leaders, sectors
+- **Company info** — fundamentals, technicals, valuation, analyst consensus (by plan)
+- **Financials** — income statements, balance sheets, cash flow
+- **Dividends** — history, yield, upcoming payments
+- **Events** — AI-generated stock event summaries
+- **WebSocket streaming** — real-time price updates pushed to you (Pro+ plan)
 
 ## Installation
 
@@ -35,16 +37,16 @@ client = SahmkClient("your_api_key")
 
 # Get a stock quote
 quote = client.quote("2222")
-print(f"{quote['name']}: {quote['last_price']} SAR ({quote['change_pct']})")
+print(f"{quote['name_en']}: {quote['price']} SAR ({quote['change_percent']}%)")
 
 # Get market summary
 market = client.market_summary()
-print(f"TASI: {market['index_value']} ({market['index_change_pct']})")
+print(f"TASI: {market['index_value']} ({market['index_change_percent']}%)")
 
-# Batch quotes
-quotes = client.quotes(["2222", "1120", "4191"])
-for q in quotes:
-    print(f"{q['symbol']}: {q['last_price']}")
+# Batch quotes (Starter+ plan)
+result = client.quotes(["2222", "1120", "4191"])
+for q in result["quotes"]:
+    print(f"{q['symbol']}: {q['price']}")
 ```
 
 ## Get Your API Key
@@ -52,7 +54,7 @@ for q in quotes:
 1. Sign up at [sahmk.sa/developers](https://sahmk.sa/developers)
 2. Verify your email
 3. Go to Dashboard → API Keys → Create Key
-4. Copy your key (starts with `shmk_live_`)
+4. Copy your key (starts with `shmk_live_` or `shmk_test_`)
 
 ## Plans
 
@@ -73,32 +75,33 @@ Check the [`examples/`](examples/) directory:
 | [`batch_quotes.py`](examples/batch_quotes.py) | Fetch multiple stocks at once |
 | [`historical.py`](examples/historical.py) | Historical price data |
 | [`market_summary.py`](examples/market_summary.py) | Market overview and movers |
-| [`websocket_stream.py`](examples/websocket_stream.py) | Real-time WebSocket streaming (Pro) |
+| [`websocket_stream.py`](examples/websocket_stream.py) | Real-time WebSocket streaming (Pro+) |
 
 ## API Reference
 
 Base URL: `https://app.sahmk.sa/api/v1`
 
-| Endpoint | Description |
-|----------|-------------|
-| `GET /quote/{symbol}/` | Real-time stock quote |
-| `GET /quotes/?symbols=...` | Batch quotes (up to 50) |
-| `GET /historical/{symbol}/` | Historical OHLCV data |
-| `GET /market/summary/` | Market overview |
-| `GET /market/gainers/` | Top gainers |
-| `GET /market/losers/` | Top losers |
-| `GET /market/volume/` | Volume leaders |
-| `GET /market/sectors/` | Sector performance |
-| `GET /financials/{symbol}/` | Financial statements |
-| `GET /company/{symbol}/` | Company info |
-| `GET /dividends/{symbol}/` | Dividend history |
-| `GET /events/` | Market events |
+| Endpoint | Plan | Description |
+|----------|------|-------------|
+| `GET /quote/{symbol}/` | Free | Stock quote |
+| `GET /quotes/?symbols=...` | Starter+ | Batch quotes (up to 50) |
+| `GET /historical/{symbol}/` | Starter+ | Historical OHLCV data |
+| `GET /market/summary/` | Free | Market overview & TASI index |
+| `GET /market/gainers/` | Free | Top gainers |
+| `GET /market/losers/` | Free | Top losers |
+| `GET /market/volume/` | Free | Volume leaders |
+| `GET /market/value/` | Free | Value leaders |
+| `GET /market/sectors/` | Free | Sector performance |
+| `GET /company/{symbol}/` | Free+ | Company info (tiered by plan) |
+| `GET /financials/{symbol}/` | Starter+ | Financial statements |
+| `GET /dividends/{symbol}/` | Starter+ | Dividend history & yield |
+| `GET /events/` | Pro+ | AI-generated stock events |
 
 All endpoints require the `X-API-Key` header.
 
 Full docs: [sahmk.sa/developers/docs](https://sahmk.sa/developers/docs)
 
-## WebSocket Streaming (Pro)
+## WebSocket Streaming (Pro+)
 
 ```python
 import asyncio
@@ -106,8 +109,10 @@ from sahmk import SahmkClient
 
 client = SahmkClient("your_api_key")
 
-async def on_quote(data):
-    print(f"{data['symbol']}: {data['last_price']}")
+async def on_quote(msg):
+    symbol = msg["symbol"]
+    price = msg["data"]["price"]
+    print(f"{symbol}: {price}")
 
 asyncio.run(client.stream(["2222", "1120"], on_quote=on_quote))
 ```
