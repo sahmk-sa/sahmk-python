@@ -1,5 +1,5 @@
 """
-Get historical price data for a stock.
+Get historical price data for a stock (Starter+ plan).
 
 Usage:
     python historical.py
@@ -16,15 +16,15 @@ API_KEY = os.environ.get("SAHMK_API_KEY", "your_api_key_here")
 
 client = SahmkClient(API_KEY)
 
-# Get last 3 months of Aramco data
-data = client.historical("2222", period="3m")
+# Get Aramco data for January 2026
+result = client.historical("2222", from_date="2026-01-01", to_date="2026-01-28")
 
-print(f"Historical data for 2222 ({len(data)} records)")
+records = result["data"]
+print(f"Historical data for {result['symbol']} ({result['count']} records, interval: {result['interval']})")
 print(f"{'Date':<15} {'Open':<10} {'High':<10} {'Low':<10} {'Close':<10} {'Volume':<15}")
 print("-" * 70)
 
-# Show the last 10 records
-for record in data[-10:]:
+for record in records[-10:]:
     print(
         f"{record.get('date', ''):<15} "
         f"{record.get('open', ''):<10} "
@@ -34,5 +34,5 @@ for record in data[-10:]:
         f"{record.get('volume', ''):<15}"
     )
 
-# You can also use custom date ranges:
-# data = client.historical("2222", start_date="2025-01-01", end_date="2025-06-30")
+# Weekly interval:
+# result = client.historical("2222", from_date="2025-01-01", to_date="2025-06-30", interval="1w")
