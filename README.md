@@ -16,11 +16,13 @@ A lightweight Python client for the [SAHMK Developer API](https://sahmk.sa/devel
 
 ## Installation
 
+After the first PyPI release:
+
 ```bash
-pip install requests websockets
+pip install sahmk
 ```
 
-Or clone this repo:
+Or clone this repo for local development:
 
 ```bash
 git clone https://github.com/sahmk-sa/sahmk-python.git
