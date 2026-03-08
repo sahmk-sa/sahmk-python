@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "sahmk"
-version = "0.1.0"
+version = "0.2.0"
 description = "Lightweight Python client for the SAHMK Developer API."
 readme = "README.md"
 requires-python = ">=3.9"
@@ -30,6 +30,9 @@ dependencies = [
   "requests>=2.28.0",
   "websockets>=12.0"
 ]
+
+[project.scripts]
+sahmk = "sahmk.cli:main"
 
 [project.urls]
 Homepage = "https://github.com/sahmk-sa/sahmk-python"

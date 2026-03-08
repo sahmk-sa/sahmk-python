@@ -16,8 +16,6 @@ A lightweight Python client for the [SAHMK Developer API](https://sahmk.sa/devel
 
 ## Installation
 
-After the first PyPI release:
-
 ```bash
 pip install sahmk
 ```
@@ -49,6 +47,23 @@ print(f"TASI: {market['index_value']} ({market['index_change_percent']}%)")
 result = client.quotes(["2222", "1120", "4191"])
 for q in result["quotes"]:
     print(f"{q['symbol']}: {q['price']}")
+```
+
+## CLI Quick Start
+
+The package also installs a CLI for instant testing:
+
+```bash
+export SAHMK_API_KEY="your_api_key"
+sahmk quote 2222
+sahmk market gainers --limit 5
+sahmk historical 2222 --from 2026-01-01 --to 2026-01-28
+```
+
+You can also pass the key directly:
+
+```bash
+sahmk quote 2222 --api-key your_api_key
 ```
 
 ## Get Your API Key
