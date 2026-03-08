@@ -118,6 +118,8 @@ All endpoints require the `X-API-Key` header.
 
 Full docs: [sahmk.sa/developers/docs](https://sahmk.sa/developers/docs)
 
+Roadmap: [ROADMAP.md](ROADMAP.md)
+
 ## WebSocket Streaming (Pro+)
 
 ```python
