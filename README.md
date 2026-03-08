@@ -80,7 +80,7 @@ sahmk quote 2222 --api-key your_api_key
 | Free | 0 SAR | 100 | - |
 | Starter | 149 SAR/mo | 5,000 | - |
 | Pro | 499 SAR/mo | 50,000 | Yes |
-| Enterprise | 1,499+ SAR/mo | Unlimited | Yes |
+| Enterprise | [`Contact us`](https://www.sahmk.sa/contactus?type=api-support) | Unlimited | Yes |
 
 ## Examples
 
