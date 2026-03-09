@@ -25,3 +25,16 @@ Thumbs.db
 # Environment
 .env
 *.env
+
+# Testing and coverage
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+pytest_cache/
+.pytest_cache/
+.cache/
+coverage.xml
+*.cover
+.hypothesis/
