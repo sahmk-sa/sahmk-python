@@ -7,7 +7,6 @@ import pytest
 import requests
 import responses
 from sahmk import SahmkClient, SahmkError, SahmkRateLimitError
-from sahmk.client import _RETRIABLE_STATUS_CODES
 
 
 @pytest.fixture

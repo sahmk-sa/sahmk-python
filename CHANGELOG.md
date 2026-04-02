@@ -4,6 +4,21 @@ All notable changes to the `sahmk` Python SDK will be documented in this file.
 
 This project follows [Semantic Versioning](https://semver.org/).
 
+## [0.6.1] — 2026-04-02
+
+### Fixed
+
+- **CLI `--compact` flag** now works in both positions: `sahmk --compact quote 2222` and `sahmk quote 2222 --compact` (previously only the first form worked)
+- **Non-JSON 200 responses** (e.g. proxy HTML errors) are now wrapped in `SahmkError` instead of raising a raw `ValueError`
+- **`on_reconnect` docstring** corrected — it fires before a reconnect attempt (after backoff delay), not after a successful reconnection
+- **Test fixtures** aligned with real API response shapes (market summary, company, financials, dividends, events)
+- **`quotes([])` guard** — calling `quotes()` with an empty list now raises `ValueError` immediately instead of sending an invalid request
+- **Redundant 429** removed from internal `_RETRIABLE_STATUS_CODES` (429 is handled by its own dedicated branch)
+
+### Changed
+
+- **PyPI classifier** updated from "3 - Alpha" to "4 - Beta"
+
 ## [0.6.0] — 2026-04-02
 
 ### Added
