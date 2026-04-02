@@ -4,6 +4,21 @@ All notable changes to the `sahmk` Python SDK will be documented in this file.
 
 This project follows [Semantic Versioning](https://semver.org/).
 
+## [0.5.0] — 2026-04-02
+
+### Added
+
+- **Typed response models** — all client methods now return typed dataclass objects (e.g., `Quote`, `Company`, `HistoricalResponse`, `FinancialsResponse`, `DividendsResponse`, `EventsResponse`, `MarketSummary`, etc.) with IDE autocompletion and attribute access
+- **Full backwards compatibility** — all typed models support dict-style `[]` access, `.get()`, `.keys()`, `.values()`, `.items()`, and `in` checks; existing code using `result["price"]` continues to work unchanged
+- **`.raw` attribute** — every model exposes the original API response dict via `.raw` for cases where you need the full untyped data
+- **Nested typed models** — complex responses have properly typed sub-objects (e.g., `Quote.liquidity` returns a `Liquidity` object, `Company.fundamentals` returns a `Fundamentals` object)
+- **Plan-aware models** — `Company` model gracefully handles tiered responses (Free: basic fields, Starter: +fundamentals, Pro: +technicals/valuation/analysts) with `None` for unavailable sections
+
+### Changed
+
+- All client methods (`quote()`, `quotes()`, `historical()`, `market_summary()`, `gainers()`, `losers()`, `volume_leaders()`, `value_leaders()`, `sectors()`, `company()`, `financials()`, `dividends()`, `events()`) now return typed model instances instead of plain dicts
+- CLI `_print_json()` now handles model objects by serializing their `.raw` dict
+
 ## [0.4.0] — 2026-04-02
 
 ### Added

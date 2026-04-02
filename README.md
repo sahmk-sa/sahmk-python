@@ -66,6 +66,28 @@ You can also pass the key directly:
 sahmk quote 2222 --api-key your_api_key
 ```
 
+## Typed Responses
+
+All client methods return typed objects with IDE autocompletion — while preserving full backwards compatibility with dict-style access:
+
+```python
+quote = client.quote("2222")
+
+# New: typed attribute access
+print(quote.price)
+print(quote.liquidity.net_value)
+
+# Still works: dict-style access (backwards compatible)
+print(quote["price"])
+print(quote.get("volume"))
+```
+
+Access the original API response dict via `.raw`:
+
+```python
+raw_dict = quote.raw
+```
+
 ## Retries and Rate Limits
 
 The client automatically retries transient failures (429 rate-limit and 5xx server errors) with exponential backoff:
