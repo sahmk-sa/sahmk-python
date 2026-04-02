@@ -66,6 +66,33 @@ You can also pass the key directly:
 sahmk quote 2222 --api-key your_api_key
 ```
 
+## Retries and Rate Limits
+
+The client automatically retries transient failures (429 rate-limit and 5xx server errors) with exponential backoff:
+
+```python
+# Defaults: 3 retries, 0.5s backoff factor (0.5s, 1s, 2s delays)
+client = SahmkClient("your_api_key")
+
+# Customize retry behavior
+client = SahmkClient("your_api_key", retries=5, backoff_factor=1.0)
+
+# Disable retries entirely
+client = SahmkClient("your_api_key", retries=0)
+```
+
+Rate limit errors include metadata from the API:
+
+```python
+from sahmk import SahmkRateLimitError
+
+try:
+    quote = client.quote("2222")
+except SahmkRateLimitError as e:
+    print(f"Rate limited. Retry after: {e.retry_after}s")
+    print(f"Remaining: {e.rate_remaining}/{e.rate_limit}")
+```
+
 ## Get Your API Key
 
 1. Sign up at [sahmk.sa/developers](https://sahmk.sa/developers)

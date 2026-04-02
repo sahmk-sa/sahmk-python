@@ -32,14 +32,15 @@ Timelines are approximate and can change based on user feedback and API evolutio
 - Error surfacing — no more silent failures in streaming
 - `SahmkError` exported from package root
 
+### v0.4.0 (released)
+
+- Automatic retries with exponential backoff for 429 and 5xx
+- `Retry-After` header support for rate-limited responses
+- `SahmkRateLimitError` with rate-limit metadata
+- Configurable retry behavior (`retries`, `backoff_factor`, `retry_on_timeout`)
+- Timeout retries (opt-in, enabled by default)
+
 ## Next Milestones
-
-### v0.4.0 (planned) — Rate-limit and retry helpers
-
-- Retry strategy for transient HTTP failures (`429`/`5xx`)
-- Exponential backoff with `Retry-After` header support
-- Configurable retry behavior per client instance
-- Better exception categories for rate-limit errors
 
 ### v0.5.0 (planned) — Typed response models
 

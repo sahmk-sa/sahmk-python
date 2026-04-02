@@ -24,8 +24,8 @@ def mock_base_url():
 
 @pytest.fixture
 def mock_client(api_key, mock_base_url):
-    """Create a SahmkClient with mock URL for testing."""
-    return SahmkClient(api_key=api_key, base_url=mock_base_url)
+    """Create a SahmkClient with mock URL for testing. Retries disabled for speed."""
+    return SahmkClient(api_key=api_key, base_url=mock_base_url, retries=0)
 
 
 @pytest.fixture
