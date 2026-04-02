@@ -126,6 +126,23 @@ class TestClientRequestMethod:
         assert exc_info.value.error_code == "UNKNOWN"
         assert "API error 500" in str(exc_info.value)
 
+    @responses.activate
+    def test_request_non_json_200_response(self, mock_client):
+        """Test handling of non-JSON 200 response (e.g. proxy HTML)."""
+        responses.add(
+            responses.GET,
+            f"{mock_client.base_url}/quote/2222/",
+            body="<html>Bad Gateway</html>",
+            status=200,
+            content_type="text/html",
+        )
+
+        with pytest.raises(SahmkError) as exc_info:
+            mock_client._request("GET", "/quote/2222/")
+
+        assert "non-json response" in str(exc_info.value).lower()
+        assert exc_info.value.status_code == 200
+
     def test_request_network_error(self, mock_client):
         """Test handling of network/request errors."""
         # Create a client with a URL that won't resolve
@@ -161,7 +178,7 @@ class TestQuoteEndpoint:
         
         assert result["symbol"] == "2222"
         assert result["price"] == 32.45
-        assert result["name_en"] == "Saudi Aramco"
+        assert result["name_en"] == "Saudi Arabian Oil Co"
 
     @responses.activate
     def test_quote_different_symbol(self, mock_client, sample_quote_response):
@@ -212,6 +229,11 @@ class TestQuotesEndpoint:
         
         request = responses.calls[0].request
         assert "symbols=2222%2C1120%2C2010" in request.url or "symbols=2222,1120,2010" in request.url
+
+    def test_quotes_empty_list(self, mock_client):
+        """Test that empty symbol list raises ValueError."""
+        with pytest.raises(ValueError, match="At least one symbol"):
+            mock_client.quotes([])
 
     def test_quotes_too_many_symbols(self, mock_client):
         """Test that more than 50 symbols raises error."""
@@ -296,8 +318,8 @@ class TestMarketEndpoints:
 
         result = mock_client.market_summary()
         
-        assert result["index"] == "TASI"
         assert result["index_value"] == 11950.35
+        assert result["index_change"] == 125.40
         assert result["market_mood"] == "bullish"
 
     @responses.activate
@@ -422,8 +444,8 @@ class TestCompanyEndpoints:
         result = mock_client.company("2222")
         
         assert result["symbol"] == "2222"
-        assert result["name_en"] == "Saudi Arabian Oil Company"
-        assert "market_cap" in result
+        assert result["name_en"] == "Saudi Arabian Oil Co"
+        assert "fundamentals" in result
 
     @responses.activate
     def test_financials(self, mock_client, sample_financials_response):
@@ -437,9 +459,9 @@ class TestCompanyEndpoints:
 
         result = mock_client.financials("2222")
         
-        assert "income_statement" in result
-        assert "balance_sheet" in result
-        assert result["income_statement"]["eps"] == 2.11
+        assert "income_statements" in result
+        assert "balance_sheets" in result
+        assert result["income_statements"][0]["total_revenue"] == 418116750000.0
 
     @responses.activate
     def test_dividends(self, mock_client, sample_dividends_response):
@@ -453,9 +475,9 @@ class TestCompanyEndpoints:
 
         result = mock_client.dividends("2222")
         
-        assert "dividend_yield" in result
+        assert "trailing_12m_yield" in result
         assert "history" in result
-        assert len(result["history"]) == 2
+        assert len(result["history"]) == 1
 
 
 class TestEventsEndpoint:

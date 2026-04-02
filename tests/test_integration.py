@@ -147,9 +147,9 @@ class TestLiveMarketData:
         """Test getting market summary."""
         result = live_client.market_summary()
         
-        assert "index" in result or "index_value" in result
-        assert "change" in result or "change_percent" in result
-        assert "volume" in result or "value" in result
+        assert "index_value" in result
+        assert "index_change" in result or "index_change_percent" in result
+        assert "total_volume" in result
         
         print(f"\nMarket Summary:")
         print(f"  Index: {result.get('index_value', 'N/A')}")
@@ -257,7 +257,7 @@ class TestLiveCompanyData:
             result = live_client.financials("2222")
             
             assert "symbol" in result
-            assert "income_statement" in result or "balance_sheet" in result or "cash_flow" in result
+            assert "income_statements" in result or "balance_sheets" in result or "cash_flows" in result
             
             print(f"\nFinancials for 2222 retrieved")
             if "income_statement" in result:

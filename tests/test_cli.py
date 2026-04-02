@@ -24,21 +24,20 @@ class TestArgumentParser:
     def test_parser_global_flags(self):
         """Test global flags are recognized."""
         parser = _build_parser()
-        
-        # Test with API key
+
         args = parser.parse_args(["--api-key", "test_key", "quote", "2222"])
         assert args.api_key == "test_key"
-        
-        # Test with base URL
+
         args = parser.parse_args(["--base-url", "https://api.test", "quote", "2222"])
         assert args.base_url == "https://api.test"
-        
-        # Test with timeout
+
         args = parser.parse_args(["--timeout", "60", "quote", "2222"])
         assert args.timeout == 60
-        
-        # Test with compact
-        args = parser.parse_args(["--compact", "quote", "2222"])
+
+    def test_parser_compact_flag_after_subcommand(self):
+        """Test --compact works after the subcommand."""
+        parser = _build_parser()
+        args = parser.parse_args(["quote", "2222", "--compact"])
         assert args.compact is True
 
     def test_parser_quote_command(self):
@@ -167,7 +166,7 @@ class TestMainQuoteCommand:
         assert exit_code == 0
         captured = capsys.readouterr()
         assert "2222" in captured.out
-        assert "Saudi Aramco" in captured.out
+        assert "Saudi Arabian Oil Co" in captured.out
 
     @responses.activate
     def test_quote_error(self, capsys):
@@ -259,7 +258,7 @@ class TestMainMarketCommand:
         
         assert exit_code == 0
         captured = capsys.readouterr()
-        assert "TASI" in captured.out
+        assert "11950.35" in captured.out
 
     @responses.activate
     def test_market_gainers(self, capsys, sample_gainers_response, monkeypatch):
@@ -444,7 +443,7 @@ class TestMainCompactOutput:
 
     @responses.activate
     def test_compact_output(self, capsys, sample_quote_response):
-        """Test --compact flag produces compact JSON."""
+        """Test --compact produces compact JSON."""
         responses.add(
             responses.GET,
             "https://app.sahmk.sa/api/v1/quote/2222/",
@@ -452,12 +451,27 @@ class TestMainCompactOutput:
             status=200,
         )
 
-        exit_code = main(["--api-key", "test_key", "--compact", "quote", "2222"])
+        exit_code = main(["--api-key", "test_key", "quote", "2222", "--compact"])
 
         assert exit_code == 0
         captured = capsys.readouterr()
-        # Compact output should not have indentation
         assert "\n  " not in captured.out
+
+    @responses.activate
+    def test_non_compact_output(self, capsys, sample_quote_response):
+        """Test default (non-compact) output is indented."""
+        responses.add(
+            responses.GET,
+            "https://app.sahmk.sa/api/v1/quote/2222/",
+            json=sample_quote_response,
+            status=200,
+        )
+
+        exit_code = main(["--api-key", "test_key", "quote", "2222"])
+
+        assert exit_code == 0
+        captured = capsys.readouterr()
+        assert "\n  " in captured.out
 
 
 class TestMainCompanyCommand:
@@ -479,7 +493,7 @@ class TestMainCompanyCommand:
         assert exit_code == 0
         captured = capsys.readouterr()
         assert "2222" in captured.out
-        assert "Saudi Arabian Oil Company" in captured.out
+        assert "Saudi Arabian Oil Co" in captured.out
 
 
 class TestMainFinancialsCommand:
@@ -500,7 +514,7 @@ class TestMainFinancialsCommand:
 
         assert exit_code == 0
         captured = capsys.readouterr()
-        assert "income_statement" in captured.out
+        assert "income_statements" in captured.out
 
 
 class TestMainDividendsCommand:
@@ -521,7 +535,7 @@ class TestMainDividendsCommand:
 
         assert exit_code == 0
         captured = capsys.readouterr()
-        assert "dividend_yield" in captured.out
+        assert "trailing_12m_yield" in captured.out
 
 
 class TestMainEventsCommand:

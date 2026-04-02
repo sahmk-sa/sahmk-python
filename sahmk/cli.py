@@ -11,6 +11,15 @@ import sys
 from .client import SahmkClient, SahmkError
 
 
+def _compact_arg(parser):
+    """Add --compact flag to a parser."""
+    parser.add_argument(
+        "--compact",
+        action="store_true",
+        help="Print compact JSON output.",
+    )
+
+
 def _build_parser():
     parser = argparse.ArgumentParser(
         prog="sahmk",
@@ -31,16 +40,12 @@ def _build_parser():
         default=30,
         help="Request timeout in seconds (default: 30).",
     )
-    parser.add_argument(
-        "--compact",
-        action="store_true",
-        help="Print compact JSON output.",
-    )
 
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     quote_parser = subparsers.add_parser("quote", help="Get a single stock quote.")
     quote_parser.add_argument("symbol", help='Stock symbol (e.g., "2222").')
+    _compact_arg(quote_parser)
 
     quotes_parser = subparsers.add_parser(
         "quotes", help="Get quotes for multiple symbols."
@@ -49,6 +54,7 @@ def _build_parser():
         "symbols",
         help='Comma-separated symbols, e.g. "2222,1120,2010".',
     )
+    _compact_arg(quotes_parser)
 
     market_parser = subparsers.add_parser("market", help="Market overview endpoints.")
     market_parser.add_argument(
@@ -61,6 +67,7 @@ def _build_parser():
         type=int,
         help="Optional limit for gainers/losers/volume/value.",
     )
+    _compact_arg(market_parser)
 
     historical_parser = subparsers.add_parser(
         "historical", help="Get historical OHLCV data."
@@ -73,21 +80,25 @@ def _build_parser():
         choices=["1d", "1w", "1m"],
         help='Interval: "1d", "1w", or "1m".',
     )
+    _compact_arg(historical_parser)
 
     company_parser = subparsers.add_parser(
         "company", help="Get company info (tiered by plan)."
     )
     company_parser.add_argument("symbol", help='Stock symbol (e.g., "2222").')
+    _compact_arg(company_parser)
 
     financials_parser = subparsers.add_parser(
         "financials", help="Get financial statements (Starter+ plan)."
     )
     financials_parser.add_argument("symbol", help='Stock symbol (e.g., "2222").')
+    _compact_arg(financials_parser)
 
     dividends_parser = subparsers.add_parser(
         "dividends", help="Get dividend history and yield (Starter+ plan)."
     )
     dividends_parser.add_argument("symbol", help='Stock symbol (e.g., "2222").')
+    _compact_arg(dividends_parser)
 
     events_parser = subparsers.add_parser(
         "events", help="Get AI-generated stock events (Pro+ plan)."
@@ -103,6 +114,7 @@ def _build_parser():
         default=None,
         help="Number of events to return.",
     )
+    _compact_arg(events_parser)
 
     stream_parser = subparsers.add_parser(
         "stream", help="Stream real-time quotes via WebSocket (Pro+ plan)."

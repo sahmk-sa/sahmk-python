@@ -16,7 +16,7 @@ WS_URL = "wss://app.sahmk.sa/ws/v1/stocks/"
 
 logger = logging.getLogger("sahmk")
 
-_RETRIABLE_STATUS_CODES = frozenset({429, 500, 502, 503, 504})
+_RETRIABLE_STATUS_CODES = frozenset({500, 502, 503, 504})
 
 
 class SahmkError(Exception):
@@ -154,7 +154,14 @@ class SahmkClient:
             if response.status_code != 200:
                 raise self._build_api_error(response)
 
-            return response.json()
+            try:
+                return response.json()
+            except (ValueError, TypeError) as e:
+                raise SahmkError(
+                    f"Unexpected non-JSON response: {e}",
+                    status_code=response.status_code,
+                    response=response,
+                )
 
         raise last_exc  # pragma: no cover
 
@@ -256,6 +263,8 @@ class SahmkClient:
             BatchQuotesResponse with .quotes list and .count
         """
         from .models import BatchQuotesResponse
+        if not symbols:
+            raise ValueError("At least one symbol is required")
         if len(symbols) > 50:
             raise SahmkError("Maximum 50 symbols per batch request")
         data = self._request(
@@ -478,8 +487,9 @@ class SahmkClient:
             on_error: Async callback — on_error(error_data)
             on_disconnect: Async callback — on_disconnect(reason) called when
                            the connection drops. Receives a string reason.
-            on_reconnect: Async callback — on_reconnect(attempt) called after
-                          a successful reconnection. Receives the attempt number.
+            on_reconnect: Async callback — on_reconnect(attempt) called before
+                          a reconnect attempt (after the backoff delay).
+                          Receives the attempt number.
             ping_interval: Seconds between keep-alive pings (default: 30)
             max_reconnect_attempts: Maximum reconnection attempts. 0 means
                                     unlimited reconnection (default). Set to -1
