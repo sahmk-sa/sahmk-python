@@ -6,11 +6,14 @@ https://sahmk.sa/developers/docs
 """
 
 import json
+import logging
 
 import requests
 
 BASE_URL = "https://app.sahmk.sa/api/v1"
 WS_URL = "wss://app.sahmk.sa/ws/v1/stocks/"
+
+logger = logging.getLogger("sahmk")
 
 
 class SahmkError(Exception):
@@ -265,9 +268,24 @@ class SahmkClient:
     # WebSocket Streaming (Pro+ plan)
     # -------------------------------------------------------------------------
 
-    async def stream(self, symbols, on_quote=None, on_error=None, ping_interval=30):
+    async def stream(
+        self,
+        symbols,
+        on_quote=None,
+        on_error=None,
+        on_disconnect=None,
+        on_reconnect=None,
+        ping_interval=30,
+        max_reconnect_attempts=0,
+        initial_reconnect_delay=1.0,
+        max_reconnect_delay=60.0,
+    ):
         """
         Stream real-time quotes via WebSocket (Pro+ plan).
+
+        Supports automatic reconnection with exponential backoff. After a
+        disconnect the client will reconnect and resubscribe to all symbols
+        automatically.
 
         Args:
             symbols: List of stock symbols to subscribe to (max 20 per call,
@@ -275,7 +293,18 @@ class SahmkClient:
             on_quote: Async callback — on_quote(data) where data contains
                       symbol, timestamp, and quote fields (price, change, etc.)
             on_error: Async callback — on_error(error_data)
+            on_disconnect: Async callback — on_disconnect(reason) called when
+                           the connection drops. Receives a string reason.
+            on_reconnect: Async callback — on_reconnect(attempt) called after
+                          a successful reconnection. Receives the attempt number.
             ping_interval: Seconds between keep-alive pings (default: 30)
+            max_reconnect_attempts: Maximum reconnection attempts. 0 means
+                                    unlimited reconnection (default). Set to -1
+                                    to disable reconnection entirely.
+            initial_reconnect_delay: Initial delay in seconds before first
+                                     reconnect attempt (default: 1.0)
+            max_reconnect_delay: Maximum delay in seconds between reconnect
+                                 attempts (default: 60.0)
 
         Usage:
             async def handle_quote(data):
@@ -292,6 +321,73 @@ class SahmkClient:
             )
 
         import asyncio
+
+        reconnect_enabled = max_reconnect_attempts != -1
+        attempt = 0
+        delay = initial_reconnect_delay
+
+        while True:
+            try:
+                await self._stream_connection(
+                    symbols=symbols,
+                    on_quote=on_quote,
+                    on_error=on_error,
+                    ping_interval=ping_interval,
+                )
+                return
+            except SahmkError:
+                raise
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:
+                reason = str(exc) or type(exc).__name__
+
+                if on_disconnect:
+                    try:
+                        await on_disconnect(reason)
+                    except Exception:
+                        pass
+
+                if not reconnect_enabled:
+                    raise SahmkError(
+                        f"WebSocket disconnected: {reason}"
+                    )
+
+                attempt += 1
+
+                if max_reconnect_attempts > 0 and attempt > max_reconnect_attempts:
+                    raise SahmkError(
+                        f"WebSocket reconnection failed after "
+                        f"{max_reconnect_attempts} attempts: {reason}"
+                    )
+
+                logger.info(
+                    "WebSocket disconnected (%s), reconnecting in %.1fs "
+                    "(attempt %d)...",
+                    reason,
+                    delay,
+                    attempt,
+                )
+
+                await asyncio.sleep(delay)
+                delay = min(delay * 2, max_reconnect_delay)
+
+                if on_reconnect:
+                    try:
+                        await on_reconnect(attempt)
+                    except Exception:
+                        pass
+
+    async def _stream_connection(
+        self,
+        symbols,
+        on_quote=None,
+        on_error=None,
+        ping_interval=30,
+    ):
+        """Single WebSocket connection lifecycle: connect, subscribe, listen."""
+        import asyncio
+        import websockets
 
         url = f"{WS_URL}?api_key={self.api_key}"
 
@@ -328,7 +424,13 @@ class SahmkClient:
 
                     if msg_type == "quote" and on_quote:
                         await on_quote(data)
-                    elif msg_type == "error" and on_error:
-                        await on_error(data)
+                    elif msg_type == "error":
+                        if on_error:
+                            await on_error(data)
+                        else:
+                            logger.warning(
+                                "WebSocket error (unhandled): %s",
+                                data.get("message", data),
+                            )
             finally:
                 ping_task.cancel()
