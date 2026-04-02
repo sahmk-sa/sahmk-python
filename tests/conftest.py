@@ -30,22 +30,33 @@ def mock_client(api_key, mock_base_url):
 
 @pytest.fixture
 def sample_quote_response():
-    """Sample quote API response."""
+    """Sample quote API response (matches live API shape)."""
     return {
         "symbol": "2222",
         "name": "أرامكو السعودية",
-        "name_en": "Saudi Aramco",
+        "name_en": "Saudi Arabian Oil Co",
         "price": 32.45,
         "change": 0.35,
         "change_percent": 1.09,
-        "volume": 15000000,
-        "bid": 32.40,
-        "ask": 32.50,
-        "liquidity": 487500000,
         "open": 32.10,
         "high": 32.60,
         "low": 32.05,
         "previous_close": 32.10,
+        "volume": 15000000,
+        "value": 487500000.0,
+        "bid": 32.40,
+        "ask": 32.50,
+        "liquidity": {
+            "inflow_value": 300000000.0,
+            "inflow_volume": 9200000,
+            "inflow_trades": 8500,
+            "outflow_value": 187500000.0,
+            "outflow_volume": 5800000,
+            "outflow_trades": 4200,
+            "net_value": 112500000.0,
+        },
+        "updated_at": "2026-02-10T12:19:22+00:00",
+        "is_delayed": False,
     }
 
 
@@ -91,18 +102,17 @@ def sample_historical_response():
 
 @pytest.fixture
 def sample_market_summary_response():
-    """Sample market summary API response."""
+    """Sample market summary API response (matches live API shape)."""
     return {
-        "index": "TASI",
+        "timestamp": "2026-01-28T12:20:00+00:00",
         "index_value": 11950.35,
-        "change": 125.40,
-        "change_percent": 1.06,
-        "volume": 350000000,
-        "value": 8750000000,
+        "index_change": 125.40,
+        "index_change_percent": 1.06,
+        "total_volume": 350000000,
+        "advancing": 142,
+        "declining": 68,
+        "unchanged": 15,
         "market_mood": "bullish",
-        "up_count": 142,
-        "down_count": 68,
-        "unchanged_count": 15,
     }
 
 
@@ -168,65 +178,147 @@ def sample_sectors_response():
 
 @pytest.fixture
 def sample_company_response():
-    """Sample company info API response."""
+    """Sample company info API response (matches live API shape)."""
     return {
         "symbol": "2222",
         "name": "أرامكو السعودية",
-        "name_en": "Saudi Arabian Oil Company",
-        "sector": "البترول",
-        "sector_en": "Energy",
-        "market_cap": 7500000000000,
-        "shares_outstanding": 231000000000,
+        "name_en": "Saudi Arabian Oil Co",
+        "current_price": 25.64,
+        "sector": "Energy",
+        "industry": "Oil & Gas",
+        "description": "Saudi Aramco is the world's largest oil producer...",
         "website": "https://www.aramco.com",
-        "description": "شركة النفط والغاز العملاقة",
+        "country": "Saudi Arabia",
+        "currency": "SAR",
+        "fundamentals": {
+            "market_cap": 6258120000000,
+            "pe_ratio": 16.77,
+            "forward_pe": 15.48,
+            "eps": 1.54,
+            "book_value": 6.16,
+            "price_to_book": 4.19,
+            "beta": 0.104,
+            "shares_outstanding": 242000000000,
+            "float_shares": 5969578000,
+            "week_high": 26.10,
+            "week_low": 25.40,
+            "month_high": 27.20,
+            "month_low": 24.80,
+            "fifty_two_week_high": 27.85,
+            "fifty_two_week_low": 23.04,
+        },
+        "technicals": {
+            "rsi_14": 55.3,
+            "macd_line": 0.12,
+            "macd_signal": 0.08,
+            "macd_histogram": 0.04,
+            "fifty_day_average": 26.1,
+            "technical_strength": 0.65,
+            "price_direction": "bullish",
+            "updated_at": "2026-01-28T10:00:00+03:00",
+        },
+        "valuation": {
+            "fair_price": 28.50,
+            "fair_price_confidence": 0.85,
+            "calculated_at": "2026-01-28T10:00:00+03:00",
+        },
+        "analysts": {
+            "target_mean": 29.5,
+            "target_median": 29.0,
+            "target_high": 35.0,
+            "target_low": 24.0,
+            "consensus": "buy",
+            "consensus_score": 2.1,
+            "num_analysts": 15,
+        },
     }
 
 
 @pytest.fixture
 def sample_financials_response():
-    """Sample financials API response."""
+    """Sample financials API response (matches live API shape)."""
     return {
         "symbol": "2222",
-        "income_statement": {
-            "revenue": 1500000000000,
-            "net_income": 490000000000,
-            "eps": 2.11,
-        },
-        "balance_sheet": {
-            "total_assets": 2200000000000,
-            "total_equity": 1540000000000,
-        },
+        "income_statements": [
+            {
+                "report_date": "2025-09-30",
+                "total_revenue": 418116750000.0,
+                "gross_profit": 215000000000.0,
+                "operating_income": 180000000000.0,
+                "net_income": 105000000000.0,
+            }
+        ],
+        "balance_sheets": [
+            {
+                "report_date": "2025-09-30",
+                "total_assets": 2516431000000.0,
+                "total_liabilities": 1026431000000.0,
+                "stockholders_equity": 1490000000000.0,
+                "total_debt": 356540000000.0,
+            }
+        ],
+        "cash_flows": [
+            {
+                "report_date": "2025-09-30",
+                "operating_cash_flow": 135375000000.0,
+                "investing_cash_flow": -45000000000.0,
+                "financing_cash_flow": -82337000000.0,
+                "free_cash_flow": 88500000000.0,
+            }
+        ],
     }
 
 
 @pytest.fixture
 def sample_dividends_response():
-    """Sample dividends API response."""
+    """Sample dividends API response (matches live API shape)."""
     return {
         "symbol": "2222",
-        "dividend_yield": 3.85,
-        "payout_ratio": 0.67,
+        "current_price": 25.64,
+        "trailing_12m_yield": 4.2,
+        "trailing_12m_dividends": 1.60,
+        "payments_last_year": 4,
+        "upcoming": [
+            {
+                "value": 0.40,
+                "period": "Q4",
+                "eligibility_date": "2026-03-15",
+                "distribution_date": "2026-04-01",
+            }
+        ],
         "history": [
-            {"date": "2024-06-15", "amount": 0.3198, "type": "quarterly"},
-            {"date": "2024-03-15", "amount": 0.3198, "type": "quarterly"},
+            {
+                "value": 0.40,
+                "value_percent": 1.5,
+                "period": "Q3",
+                "fiscal_year": 2025,
+                "announcement_date": "2025-09-01",
+                "eligibility_date": "2025-09-15",
+                "distribution_date": "2025-10-01",
+            }
         ],
     }
 
 
 @pytest.fixture
 def sample_events_response():
-    """Sample events API response."""
+    """Sample events API response (matches live API shape)."""
     return {
         "events": [
             {
-                "id": "evt_123",
                 "symbol": "2222",
-                "type": "earnings",
-                "title": "إعلان النتائج المالية",
-                "date": "2024-08-10",
-                "summary": "أرامكو تعلن عن ارتفاع الأرباح",
+                "stock_name": "أرامكو السعودية",
+                "event_type": "FINANCIAL_REPORT",
+                "importance": "important",
+                "sentiment": "positive",
+                "description": "أرامكو تعلن عن ارتفاع الأرباح بنسبة 13%",
+                "article_date": "2026-01-29T17:10:06+00:00",
+                "created_at": "2026-01-29T17:10:12+00:00",
             }
         ],
         "count": 1,
-        "available_types": ["earnings", "dividend", "news", "technical"],
+        "available_types": [
+            "FINANCIAL_REPORT", "DIVIDEND_ANNOUNCEMENT", "STOCK_SPLIT",
+            "MERGER_ACQUISITION", "MANAGEMENT_CHANGE",
+        ],
     }
