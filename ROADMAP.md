@@ -47,13 +47,13 @@ Timelines are approximate and can change based on user feedback and API evolutio
 - Nested typed sub-objects (Liquidity, Fundamentals, Technicals, etc.)
 - `.raw` attribute on all models for original API response access
 
+### v0.6.0 (released)
+
+- CLI commands for `company`, `financials`, `dividends`, `events`, and `stream`
+- Full endpoint coverage in CLI
+- Stream command outputs JSON lines with auto-reconnect
+
 ## Next Milestones
-
-### v0.6.0 (planned) — CLI expansion
-
-- CLI commands for `company`, `financials`, `dividends`, `events`
-- Optional `stream` CLI command
-- Improved CLI output modes
 
 ## Documentation and Examples Plan
 
