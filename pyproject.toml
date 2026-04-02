@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "sahmk"
-version = "0.4.0"
+version = "0.5.0"
 description = "Lightweight Python client for the SAHMK Developer API."
 readme = "README.md"
 requires-python = ">=3.9"

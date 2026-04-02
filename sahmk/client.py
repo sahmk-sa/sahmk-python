@@ -239,10 +239,11 @@ class SahmkClient:
             symbol: Stock symbol (e.g., "2222" for Aramco)
 
         Returns:
-            dict with keys: symbol, name, name_en, price, change,
-            change_percent, volume, bid, ask, liquidity, etc.
+            Quote object (supports dict-style access via [] for backwards compat)
         """
-        return self._request("GET", f"/quote/{symbol}/")
+        from .models import Quote
+        data = self._request("GET", f"/quote/{symbol}/")
+        return Quote.from_dict(data)
 
     def quotes(self, symbols):
         """
@@ -252,13 +253,15 @@ class SahmkClient:
             symbols: List of stock symbols (up to 50)
 
         Returns:
-            dict with "quotes" list and "count"
+            BatchQuotesResponse with .quotes list and .count
         """
+        from .models import BatchQuotesResponse
         if len(symbols) > 50:
             raise SahmkError("Maximum 50 symbols per batch request")
-        return self._request(
+        data = self._request(
             "GET", "/quotes/", params={"symbols": ",".join(symbols)}
         )
+        return BatchQuotesResponse.from_dict(data)
 
     # -------------------------------------------------------------------------
     # Historical
@@ -275,8 +278,9 @@ class SahmkClient:
             interval: "1d", "1w", or "1m" (default: "1d")
 
         Returns:
-            dict with "symbol", "interval", "from", "to", "count", and "data" list
+            HistoricalResponse with .data list of OHLCV objects
         """
+        from .models import HistoricalResponse
         params = {}
         if from_date:
             params["from"] = from_date
@@ -284,15 +288,23 @@ class SahmkClient:
             params["to"] = to_date
         if interval:
             params["interval"] = interval
-        return self._request("GET", f"/historical/{symbol}/", params=params)
+        data = self._request("GET", f"/historical/{symbol}/", params=params)
+        return HistoricalResponse.from_dict(data)
 
     # -------------------------------------------------------------------------
     # Market
     # -------------------------------------------------------------------------
 
     def market_summary(self):
-        """Get market overview (TASI index, change, volume, market_mood)."""
-        return self._request("GET", "/market/summary/")
+        """
+        Get market overview (TASI index, change, volume, market_mood).
+
+        Returns:
+            MarketSummary object
+        """
+        from .models import MarketSummary
+        data = self._request("GET", "/market/summary/")
+        return MarketSummary.from_dict(data)
 
     def gainers(self, limit=None):
         """
@@ -302,12 +314,14 @@ class SahmkClient:
             limit: Number of results (default: 10, max: 50)
 
         Returns:
-            dict with "gainers" list and "count"
+            MarketMoversResponse with .stocks list
         """
+        from .models import MarketMoversResponse
         params = {}
         if limit is not None:
             params["limit"] = limit
-        return self._request("GET", "/market/gainers/", params=params or None)
+        data = self._request("GET", "/market/gainers/", params=params or None)
+        return MarketMoversResponse.from_dict(data, list_key="gainers")
 
     def losers(self, limit=None):
         """
@@ -317,12 +331,14 @@ class SahmkClient:
             limit: Number of results (default: 10, max: 50)
 
         Returns:
-            dict with "losers" list and "count"
+            MarketMoversResponse with .stocks list
         """
+        from .models import MarketMoversResponse
         params = {}
         if limit is not None:
             params["limit"] = limit
-        return self._request("GET", "/market/losers/", params=params or None)
+        data = self._request("GET", "/market/losers/", params=params or None)
+        return MarketMoversResponse.from_dict(data, list_key="losers")
 
     def volume_leaders(self, limit=None):
         """
@@ -332,12 +348,14 @@ class SahmkClient:
             limit: Number of results (default: 10, max: 50)
 
         Returns:
-            dict with "stocks" list and "count"
+            MarketMoversResponse with .stocks list
         """
+        from .models import MarketMoversResponse
         params = {}
         if limit is not None:
             params["limit"] = limit
-        return self._request("GET", "/market/volume/", params=params or None)
+        data = self._request("GET", "/market/volume/", params=params or None)
+        return MarketMoversResponse.from_dict(data, list_key="stocks")
 
     def value_leaders(self, limit=None):
         """
@@ -347,21 +365,25 @@ class SahmkClient:
             limit: Number of results (default: 10, max: 50)
 
         Returns:
-            dict with "stocks" list and "count"
+            MarketMoversResponse with .stocks list
         """
+        from .models import MarketMoversResponse
         params = {}
         if limit is not None:
             params["limit"] = limit
-        return self._request("GET", "/market/value/", params=params or None)
+        data = self._request("GET", "/market/value/", params=params or None)
+        return MarketMoversResponse.from_dict(data, list_key="stocks")
 
     def sectors(self):
         """
         Get sector performance.
 
         Returns:
-            dict with "sectors" list and "count"
+            SectorsResponse with .sectors list
         """
-        return self._request("GET", "/market/sectors/")
+        from .models import SectorsResponse
+        data = self._request("GET", "/market/sectors/")
+        return SectorsResponse.from_dict(data)
 
     # -------------------------------------------------------------------------
     # Company Data
@@ -371,16 +393,35 @@ class SahmkClient:
         """
         Get company info. Response varies by plan:
         Free (basic), Starter (fundamentals), Pro (technicals, valuation, analysts).
+
+        Returns:
+            Company object
         """
-        return self._request("GET", f"/company/{symbol}/")
+        from .models import Company as CompanyModel
+        data = self._request("GET", f"/company/{symbol}/")
+        return CompanyModel.from_dict(data)
 
     def financials(self, symbol):
-        """Get financial statements (income, balance sheet, cash flow). Starter+ plan."""
-        return self._request("GET", f"/financials/{symbol}/")
+        """
+        Get financial statements (income, balance sheet, cash flow). Starter+ plan.
+
+        Returns:
+            FinancialsResponse object
+        """
+        from .models import FinancialsResponse
+        data = self._request("GET", f"/financials/{symbol}/")
+        return FinancialsResponse.from_dict(data)
 
     def dividends(self, symbol):
-        """Get dividend history and yield. Starter+ plan."""
-        return self._request("GET", f"/dividends/{symbol}/")
+        """
+        Get dividend history and yield. Starter+ plan.
+
+        Returns:
+            DividendsResponse object
+        """
+        from .models import DividendsResponse
+        data = self._request("GET", f"/dividends/{symbol}/")
+        return DividendsResponse.from_dict(data)
 
     # -------------------------------------------------------------------------
     # Events
@@ -395,14 +436,16 @@ class SahmkClient:
             limit: Number of results (default: 20)
 
         Returns:
-            dict with "events" list, "count", and "available_types"
+            EventsResponse with .events list
         """
+        from .models import EventsResponse
         params = {}
         if symbol:
             params["symbol"] = symbol
         if limit is not None:
             params["limit"] = limit
-        return self._request("GET", "/events/", params=params or None)
+        data = self._request("GET", "/events/", params=params or None)
+        return EventsResponse.from_dict(data)
 
     # -------------------------------------------------------------------------
     # WebSocket Streaming (Pro+ plan)

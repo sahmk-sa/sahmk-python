@@ -81,10 +81,11 @@ def _resolve_api_key(cli_api_key):
 
 
 def _print_json(payload, compact=False):
+    data = getattr(payload, "raw", payload)
     if compact:
-        print(json.dumps(payload, ensure_ascii=False, separators=(",", ":")))
+        print(json.dumps(data, ensure_ascii=False, separators=(",", ":")))
         return
-    print(json.dumps(payload, ensure_ascii=False, indent=2))
+    print(json.dumps(data, ensure_ascii=False, indent=2))
 
 
 def main(argv=None):

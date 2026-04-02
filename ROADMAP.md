@@ -40,13 +40,14 @@ Timelines are approximate and can change based on user feedback and API evolutio
 - Configurable retry behavior (`retries`, `backoff_factor`, `retry_on_timeout`)
 - Timeout retries (opt-in, enabled by default)
 
+### v0.5.0 (released)
+
+- Typed dataclass models for all endpoints (Quote, Company, Historical, etc.)
+- Full backwards compatibility — dict-style `[]` access preserved
+- Nested typed sub-objects (Liquidity, Fundamentals, Technicals, etc.)
+- `.raw` attribute on all models for original API response access
+
 ## Next Milestones
-
-### v0.5.0 (planned) — Typed response models
-
-- Typed response models for key endpoints (quote, company, historical, etc.)
-- Improved developer experience with IDE autocompletion
-- Backwards-compatible — raw dict access preserved
 
 ### v0.6.0 (planned) — CLI expansion
 
