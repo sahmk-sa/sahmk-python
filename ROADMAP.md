@@ -23,25 +23,35 @@ Timelines are approximate and can change based on user feedback and API evolutio
 - CLI commands for `quote`, `quotes`, `market`, and `historical`
 - API key support via `--api-key` or `SAHMK_API_KEY`
 
-## Next Milestones
+### v0.3.0 (released)
 
-### v0.3.0 (planned) — Streaming reliability
-
-- Optional WebSocket auto-reconnect
+- WebSocket auto-reconnect with exponential backoff
 - Automatic resubscribe after reconnect
-- Better stream lifecycle/error messages for long-running consumers
+- `on_disconnect` and `on_reconnect` callbacks for connection lifecycle visibility
+- Configurable reconnect behavior (`max_reconnect_attempts`, delays)
+- Error surfacing — no more silent failures in streaming
+- `SahmkError` exported from package root
+
+## Next Milestones
 
 ### v0.4.0 (planned) — Rate-limit and retry helpers
 
 - Retry strategy for transient HTTP failures (`429`/`5xx`)
-- Helper utilities for reading rate-limit behavior in a friendly way
-- Better guidance for backoff patterns in docs and examples
+- Exponential backoff with `Retry-After` header support
+- Configurable retry behavior per client instance
+- Better exception categories for rate-limit errors
 
-### v0.5.0 (planned) — Developer ergonomics
+### v0.5.0 (planned) — Typed response models
 
-- Typed response models for key endpoints (where useful)
-- Improved CLI output modes (compact/table)
-- Better exception categories for easier app-level handling
+- Typed response models for key endpoints (quote, company, historical, etc.)
+- Improved developer experience with IDE autocompletion
+- Backwards-compatible — raw dict access preserved
+
+### v0.6.0 (planned) — CLI expansion
+
+- CLI commands for `company`, `financials`, `dividends`, `events`
+- Optional `stream` CLI command
+- Improved CLI output modes
 
 ## Documentation and Examples Plan
 

@@ -118,6 +118,8 @@ All endpoints require the `X-API-Key` header.
 
 Full docs: [sahmk.sa/developers/docs](https://sahmk.sa/developers/docs)
 
+Changelog: [CHANGELOG.md](CHANGELOG.md)
+
 Roadmap: [ROADMAP.md](ROADMAP.md)
 
 ## WebSocket Streaming (Pro+)
@@ -134,6 +136,27 @@ async def on_quote(msg):
     print(f"{symbol}: {price}")
 
 asyncio.run(client.stream(["2222", "1120"], on_quote=on_quote))
+```
+
+### Auto-Reconnect
+
+The streaming client automatically reconnects on disconnect with exponential backoff. All symbols are resubscribed after reconnection.
+
+```python
+async def on_disconnect(reason):
+    print(f"Disconnected: {reason}")
+
+async def on_reconnect(attempt):
+    print(f"Reconnecting (attempt #{attempt})...")
+
+await client.stream(
+    ["2222", "1120"],
+    on_quote=on_quote,
+    on_disconnect=on_disconnect,
+    on_reconnect=on_reconnect,
+    # max_reconnect_attempts=0 means unlimited (default)
+    # Set to -1 to disable reconnect entirely
+)
 ```
 
 Connection URL: `wss://app.sahmk.sa/ws/v1/stocks/?api_key=YOUR_KEY`

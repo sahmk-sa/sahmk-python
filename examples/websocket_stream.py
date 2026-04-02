@@ -2,8 +2,10 @@
 Real-time stock price streaming via WebSocket.
 
 Requires Pro plan or higher.
+Includes auto-reconnect with exponential backoff.
 
 Usage:
+    export SAHMK_API_KEY="your_api_key"
     python websocket_stream.py
 """
 
@@ -35,14 +37,31 @@ async def on_error(error):
     print(f"[ERROR] {error.get('message', error)}")
 
 
+async def on_disconnect(reason):
+    """Called when the WebSocket connection drops."""
+    print(f"[DISCONNECTED] {reason}")
+
+
+async def on_reconnect(attempt):
+    """Called when reconnecting after a disconnect."""
+    print(f"[RECONNECTING] Attempt #{attempt}...")
+
+
 async def main():
     symbols = ["2222", "1120", "4191", "2010"]
 
     print(f"Streaming real-time quotes for: {', '.join(symbols)}")
+    print("Auto-reconnect is enabled (unlimited attempts)")
     print("Press Ctrl+C to stop\n")
 
     try:
-        await client.stream(symbols, on_quote=on_quote, on_error=on_error)
+        await client.stream(
+            symbols,
+            on_quote=on_quote,
+            on_error=on_error,
+            on_disconnect=on_disconnect,
+            on_reconnect=on_reconnect,
+        )
     except KeyboardInterrupt:
         print("\nStopped.")
 
