@@ -58,6 +58,11 @@ export SAHMK_API_KEY="your_api_key"
 sahmk quote 2222
 sahmk market gainers --limit 5
 sahmk historical 2222 --from 2026-01-01 --to 2026-01-28
+sahmk company 2222
+sahmk financials 2222
+sahmk dividends 2222
+sahmk events --symbol 2222 --limit 5
+sahmk stream 2222,1120
 ```
 
 You can also pass the key directly:

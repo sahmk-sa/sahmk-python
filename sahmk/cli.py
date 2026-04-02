@@ -3,6 +3,7 @@ Command-line interface for the SAHMK Python SDK.
 """
 
 import argparse
+import asyncio
 import json
 import os
 import sys
@@ -73,6 +74,44 @@ def _build_parser():
         help='Interval: "1d", "1w", or "1m".',
     )
 
+    company_parser = subparsers.add_parser(
+        "company", help="Get company info (tiered by plan)."
+    )
+    company_parser.add_argument("symbol", help='Stock symbol (e.g., "2222").')
+
+    financials_parser = subparsers.add_parser(
+        "financials", help="Get financial statements (Starter+ plan)."
+    )
+    financials_parser.add_argument("symbol", help='Stock symbol (e.g., "2222").')
+
+    dividends_parser = subparsers.add_parser(
+        "dividends", help="Get dividend history and yield (Starter+ plan)."
+    )
+    dividends_parser.add_argument("symbol", help='Stock symbol (e.g., "2222").')
+
+    events_parser = subparsers.add_parser(
+        "events", help="Get AI-generated stock events (Pro+ plan)."
+    )
+    events_parser.add_argument(
+        "--symbol",
+        default=None,
+        help="Filter events for a specific stock symbol.",
+    )
+    events_parser.add_argument(
+        "--limit",
+        type=int,
+        default=None,
+        help="Number of events to return.",
+    )
+
+    stream_parser = subparsers.add_parser(
+        "stream", help="Stream real-time quotes via WebSocket (Pro+ plan)."
+    )
+    stream_parser.add_argument(
+        "symbols",
+        help='Comma-separated symbols to stream, e.g. "2222,1120".',
+    )
+
     return parser
 
 
@@ -86,6 +125,55 @@ def _print_json(payload, compact=False):
         print(json.dumps(data, ensure_ascii=False, separators=(",", ":")))
         return
     print(json.dumps(data, ensure_ascii=False, indent=2))
+
+
+def _run_stream(client, symbols):
+    """Run the WebSocket stream, printing quotes as JSON lines."""
+
+    async def on_quote(msg):
+        symbol = msg.get("symbol", "?")
+        data = msg.get("data", {})
+        line = json.dumps(
+            {"symbol": symbol, **data},
+            ensure_ascii=False,
+        )
+        print(line, flush=True)
+
+    async def on_error(error):
+        err_msg = error.get("message", str(error))
+        print(
+            json.dumps({"error": err_msg}, ensure_ascii=False),
+            file=sys.stderr,
+            flush=True,
+        )
+
+    async def on_disconnect(reason):
+        print(
+            json.dumps({"status": "disconnected", "reason": reason}, ensure_ascii=False),
+            file=sys.stderr,
+            flush=True,
+        )
+
+    async def on_reconnect(attempt):
+        print(
+            json.dumps({"status": "reconnecting", "attempt": attempt}, ensure_ascii=False),
+            file=sys.stderr,
+            flush=True,
+        )
+
+    async def _stream():
+        await client.stream(
+            symbols,
+            on_quote=on_quote,
+            on_error=on_error,
+            on_disconnect=on_disconnect,
+            on_reconnect=on_reconnect,
+        )
+
+    try:
+        asyncio.run(_stream())
+    except KeyboardInterrupt:
+        pass
 
 
 def main(argv=None):
@@ -130,6 +218,20 @@ def main(argv=None):
                 to_date=args.to_date,
                 interval=args.interval,
             )
+        elif args.command == "company":
+            result = client.company(args.symbol)
+        elif args.command == "financials":
+            result = client.financials(args.symbol)
+        elif args.command == "dividends":
+            result = client.dividends(args.symbol)
+        elif args.command == "events":
+            result = client.events(symbol=args.symbol, limit=args.limit)
+        elif args.command == "stream":
+            symbols = [s.strip() for s in args.symbols.split(",") if s.strip()]
+            if not symbols:
+                parser.error("At least one symbol is required for stream.")
+            _run_stream(client, symbols)
+            return 0
         else:
             parser.error("Unknown command.")
             return 2

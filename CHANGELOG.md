@@ -4,6 +4,21 @@ All notable changes to the `sahmk` Python SDK will be documented in this file.
 
 This project follows [Semantic Versioning](https://semver.org/).
 
+## [0.6.0] — 2026-04-02
+
+### Added
+
+- **CLI: `company` command** — `sahmk company 2222` to get company info
+- **CLI: `financials` command** — `sahmk financials 2222` for financial statements
+- **CLI: `dividends` command** — `sahmk dividends 2222` for dividend history
+- **CLI: `events` command** — `sahmk events --symbol 2222 --limit 10` for stock events
+- **CLI: `stream` command** — `sahmk stream 2222,1120` for real-time WebSocket streaming with auto-reconnect; outputs JSON lines to stdout, status/errors to stderr; stop with Ctrl+C
+
+### Changed
+
+- CLI now covers all SDK endpoints (previously only quote, quotes, market, historical)
+- Stream command outputs each quote as a single JSON line for easy piping/parsing
+
 ## [0.5.0] — 2026-04-02
 
 ### Added

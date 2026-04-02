@@ -8,7 +8,7 @@ from unittest import mock
 
 import pytest
 import responses
-from sahmk.cli import main, _build_parser, _resolve_api_key, _print_json
+from sahmk.cli import main, _build_parser, _resolve_api_key, _print_json, _run_stream
 from sahmk.client import SahmkError
 
 
@@ -453,8 +453,169 @@ class TestMainCompactOutput:
         )
 
         exit_code = main(["--api-key", "test_key", "--compact", "quote", "2222"])
-        
+
         assert exit_code == 0
         captured = capsys.readouterr()
         # Compact output should not have indentation
         assert "\n  " not in captured.out
+
+
+class TestMainCompanyCommand:
+    """Tests for main function with company command."""
+
+    @responses.activate
+    def test_company_success(self, capsys, sample_company_response, monkeypatch):
+        """Test successful company command."""
+        monkeypatch.setenv("SAHMK_API_KEY", "test_key")
+        responses.add(
+            responses.GET,
+            "https://app.sahmk.sa/api/v1/company/2222/",
+            json=sample_company_response,
+            status=200,
+        )
+
+        exit_code = main(["company", "2222"])
+
+        assert exit_code == 0
+        captured = capsys.readouterr()
+        assert "2222" in captured.out
+        assert "Saudi Arabian Oil Company" in captured.out
+
+
+class TestMainFinancialsCommand:
+    """Tests for main function with financials command."""
+
+    @responses.activate
+    def test_financials_success(self, capsys, sample_financials_response, monkeypatch):
+        """Test successful financials command."""
+        monkeypatch.setenv("SAHMK_API_KEY", "test_key")
+        responses.add(
+            responses.GET,
+            "https://app.sahmk.sa/api/v1/financials/2222/",
+            json=sample_financials_response,
+            status=200,
+        )
+
+        exit_code = main(["financials", "2222"])
+
+        assert exit_code == 0
+        captured = capsys.readouterr()
+        assert "income_statement" in captured.out
+
+
+class TestMainDividendsCommand:
+    """Tests for main function with dividends command."""
+
+    @responses.activate
+    def test_dividends_success(self, capsys, sample_dividends_response, monkeypatch):
+        """Test successful dividends command."""
+        monkeypatch.setenv("SAHMK_API_KEY", "test_key")
+        responses.add(
+            responses.GET,
+            "https://app.sahmk.sa/api/v1/dividends/2222/",
+            json=sample_dividends_response,
+            status=200,
+        )
+
+        exit_code = main(["dividends", "2222"])
+
+        assert exit_code == 0
+        captured = capsys.readouterr()
+        assert "dividend_yield" in captured.out
+
+
+class TestMainEventsCommand:
+    """Tests for main function with events command."""
+
+    @responses.activate
+    def test_events_success(self, capsys, sample_events_response, monkeypatch):
+        """Test successful events command."""
+        monkeypatch.setenv("SAHMK_API_KEY", "test_key")
+        responses.add(
+            responses.GET,
+            "https://app.sahmk.sa/api/v1/events/",
+            json=sample_events_response,
+            status=200,
+        )
+
+        exit_code = main(["events"])
+
+        assert exit_code == 0
+        captured = capsys.readouterr()
+        assert "events" in captured.out
+
+    @responses.activate
+    def test_events_with_symbol(self, capsys, sample_events_response, monkeypatch):
+        """Test events command with --symbol filter."""
+        monkeypatch.setenv("SAHMK_API_KEY", "test_key")
+        responses.add(
+            responses.GET,
+            "https://app.sahmk.sa/api/v1/events/",
+            json=sample_events_response,
+            status=200,
+        )
+
+        exit_code = main(["events", "--symbol", "2222"])
+
+        assert exit_code == 0
+        request = responses.calls[0].request
+        assert "symbol=2222" in request.url
+
+    @responses.activate
+    def test_events_with_limit(self, capsys, sample_events_response, monkeypatch):
+        """Test events command with --limit."""
+        monkeypatch.setenv("SAHMK_API_KEY", "test_key")
+        responses.add(
+            responses.GET,
+            "https://app.sahmk.sa/api/v1/events/",
+            json=sample_events_response,
+            status=200,
+        )
+
+        exit_code = main(["events", "--limit", "5"])
+
+        assert exit_code == 0
+        request = responses.calls[0].request
+        assert "limit=5" in request.url
+
+
+class TestParserNewCommands:
+    """Tests for parsing new CLI commands."""
+
+    def test_parser_company_command(self):
+        parser = _build_parser()
+        args = parser.parse_args(["company", "2222"])
+        assert args.command == "company"
+        assert args.symbol == "2222"
+
+    def test_parser_financials_command(self):
+        parser = _build_parser()
+        args = parser.parse_args(["financials", "2222"])
+        assert args.command == "financials"
+        assert args.symbol == "2222"
+
+    def test_parser_dividends_command(self):
+        parser = _build_parser()
+        args = parser.parse_args(["dividends", "2222"])
+        assert args.command == "dividends"
+        assert args.symbol == "2222"
+
+    def test_parser_events_command(self):
+        parser = _build_parser()
+        args = parser.parse_args(["events", "--symbol", "2222", "--limit", "10"])
+        assert args.command == "events"
+        assert args.symbol == "2222"
+        assert args.limit == 10
+
+    def test_parser_events_no_args(self):
+        parser = _build_parser()
+        args = parser.parse_args(["events"])
+        assert args.command == "events"
+        assert args.symbol is None
+        assert args.limit is None
+
+    def test_parser_stream_command(self):
+        parser = _build_parser()
+        args = parser.parse_args(["stream", "2222,1120"])
+        assert args.command == "stream"
+        assert args.symbols == "2222,1120"
