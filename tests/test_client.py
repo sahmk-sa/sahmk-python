@@ -4,7 +4,7 @@ import json
 import pytest
 import requests
 import responses
-from sahmk import SahmkClient
+from sahmk import SahmkClient, SahmkRateLimitError
 from sahmk.client import SahmkError, BASE_URL, WS_URL
 
 
@@ -84,12 +84,13 @@ class TestClientRequestMethod:
             status=429,
         )
 
-        with pytest.raises(SahmkError) as exc_info:
+        with pytest.raises(SahmkRateLimitError) as exc_info:
             mock_client._request("GET", "/quote/2222/")
 
         assert exc_info.value.status_code == 429
         assert exc_info.value.error_code == "RATE_LIMIT"
         assert "Rate limit exceeded" in str(exc_info.value)
+        assert isinstance(exc_info.value, SahmkError)
 
     @responses.activate
     def test_request_api_error_with_json(self, mock_client):

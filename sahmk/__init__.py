@@ -1,4 +1,4 @@
-from .client import SahmkClient, SahmkError
+from .client import SahmkClient, SahmkError, SahmkRateLimitError
 
-__version__ = "0.3.0"
-__all__ = ["SahmkClient", "SahmkError"]
+__version__ = "0.4.0"
+__all__ = ["SahmkClient", "SahmkError", "SahmkRateLimitError"]

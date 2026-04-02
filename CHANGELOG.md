@@ -4,6 +4,26 @@ All notable changes to the `sahmk` Python SDK will be documented in this file.
 
 This project follows [Semantic Versioning](https://semver.org/).
 
+## [0.4.0] — 2026-04-02
+
+### Added
+
+- **Automatic retries** for transient failures — 429 (rate limit) and 5xx (server errors) are retried with exponential backoff (default: 3 attempts, delays of 0.5s → 1s → 2s)
+- **`Retry-After` header support** — 429 responses with a `Retry-After` header use the server-specified wait time instead of computed backoff
+- **`SahmkRateLimitError`** — new exception subclass of `SahmkError` with rate-limit metadata: `retry_after`, `rate_limit`, `rate_remaining`, `rate_reset` (from API response headers)
+- **Configurable retry behavior** — `SahmkClient(retries=3, backoff_factor=0.5, retry_on_timeout=True)` with sensible defaults
+- **Timeout retry support** — request timeouts can optionally be retried (enabled by default)
+
+### Changed
+
+- `SahmkClient.__init__()` now accepts `retries`, `backoff_factor`, and `retry_on_timeout` keyword arguments (all optional, backwards-compatible)
+- 4xx client errors (400, 401, 403, 404) are never retried — only 429 and 5xx trigger retry logic
+- Network errors (`ConnectionError`, etc.) are raised immediately and never retried (only timeouts are retried when `retry_on_timeout=True`)
+
+### Fixed
+
+- Rate limit errors now provide structured metadata instead of a generic message
+
 ## [0.3.0] — 2026-04-02
 
 ### Added

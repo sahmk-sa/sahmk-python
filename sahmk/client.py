@@ -7,6 +7,7 @@ https://sahmk.sa/developers/docs
 
 import json
 import logging
+import time
 
 import requests
 
@@ -14,6 +15,8 @@ BASE_URL = "https://app.sahmk.sa/api/v1"
 WS_URL = "wss://app.sahmk.sa/ws/v1/stocks/"
 
 logger = logging.getLogger("sahmk")
+
+_RETRIABLE_STATUS_CODES = frozenset({429, 500, 502, 503, 504})
 
 
 class SahmkError(Exception):
@@ -26,6 +29,38 @@ class SahmkError(Exception):
         self.response = response
 
 
+class SahmkRateLimitError(SahmkError):
+    """Raised when the API returns 429 Too Many Requests.
+
+    Attributes:
+        retry_after: Seconds to wait before retrying (from Retry-After header),
+                     or None if the header was not present.
+        rate_limit: Daily request limit (from X-RateLimit-Limit), or None.
+        rate_remaining: Remaining requests (from X-RateLimit-Remaining), or None.
+        rate_reset: Reset timestamp string (from X-RateLimit-Reset), or None.
+    """
+
+    def __init__(
+        self,
+        message,
+        response=None,
+        retry_after=None,
+        rate_limit=None,
+        rate_remaining=None,
+        rate_reset=None,
+    ):
+        super().__init__(
+            message,
+            status_code=429,
+            error_code="RATE_LIMIT",
+            response=response,
+        )
+        self.retry_after = retry_after
+        self.rate_limit = rate_limit
+        self.rate_remaining = rate_remaining
+        self.rate_reset = rate_reset
+
+
 class SahmkClient:
     """
     SAHMK Developer API client.
@@ -36,7 +71,15 @@ class SahmkClient:
         print(quote["price"])
     """
 
-    def __init__(self, api_key, base_url=None, timeout=30):
+    def __init__(
+        self,
+        api_key,
+        base_url=None,
+        timeout=30,
+        retries=3,
+        backoff_factor=0.5,
+        retry_on_timeout=True,
+    ):
         """
         Initialize the client.
 
@@ -44,48 +87,145 @@ class SahmkClient:
             api_key: Your SAHMK API key (starts with shmk_live_ or shmk_test_)
             base_url: Override the default API base URL
             timeout: Request timeout in seconds (default: 30)
+            retries: Max retry attempts for transient failures — 429 and 5xx.
+                     Set to 0 to disable retries. (default: 3)
+            backoff_factor: Multiplier for exponential backoff between retries.
+                            Delay = backoff_factor * (2 ** attempt), so with the
+                            default 0.5 the delays are 0.5s, 1s, 2s. (default: 0.5)
+            retry_on_timeout: Whether to retry on request timeouts. (default: True)
         """
         self.api_key = api_key
         self.base_url = (base_url or BASE_URL).rstrip("/")
         self.timeout = timeout
+        self.retries = retries
+        self.backoff_factor = backoff_factor
+        self.retry_on_timeout = retry_on_timeout
         self.session = requests.Session()
         self.session.headers.update({"X-API-Key": api_key})
 
     def _request(self, method, endpoint, params=None):
-        """Make an API request."""
+        """Make an API request with automatic retries for transient failures."""
         url = f"{self.base_url}{endpoint}"
-        try:
-            response = self.session.request(
-                method, url, params=params, timeout=self.timeout
-            )
-        except requests.RequestException as e:
-            raise SahmkError(f"Request failed: {e}")
+        last_exc = None
 
-        if response.status_code == 429:
-            raise SahmkError(
-                "Rate limit exceeded. Check X-RateLimit-Remaining header.",
-                status_code=429,
-                error_code="RATE_LIMIT",
-                response=response,
-            )
-
-        if response.status_code != 200:
+        for attempt in range(1 + self.retries):
             try:
-                body = response.json()
-                err = body.get("error", {})
-                code = err.get("code", "UNKNOWN")
-                message = err.get("message", response.text)
-            except (ValueError, KeyError):
-                code = "UNKNOWN"
-                message = response.text
-            raise SahmkError(
-                f"API error {response.status_code}: {message}",
-                status_code=response.status_code,
-                error_code=code,
-                response=response,
-            )
+                response = self.session.request(
+                    method, url, params=params, timeout=self.timeout
+                )
+            except requests.Timeout as e:
+                last_exc = SahmkError(f"Request timed out: {e}")
+                if self.retry_on_timeout and attempt < self.retries:
+                    self._backoff(attempt)
+                    continue
+                raise last_exc
+            except requests.RequestException as e:
+                raise SahmkError(f"Request failed: {e}")
 
-        return response.json()
+            if response.status_code == 429:
+                last_exc = self._build_rate_limit_error(response)
+                if attempt < self.retries:
+                    wait = self._rate_limit_wait(response, attempt)
+                    logger.info(
+                        "Rate limited (429), retrying in %.1fs (attempt %d/%d)...",
+                        wait,
+                        attempt + 1,
+                        self.retries,
+                    )
+                    time.sleep(wait)
+                    continue
+                raise last_exc
+
+            if response.status_code in _RETRIABLE_STATUS_CODES:
+                last_exc = self._build_api_error(response)
+                if attempt < self.retries:
+                    wait = self.backoff_factor * (2 ** attempt)
+                    logger.info(
+                        "Server error (%d), retrying in %.1fs (attempt %d/%d)...",
+                        response.status_code,
+                        wait,
+                        attempt + 1,
+                        self.retries,
+                    )
+                    time.sleep(wait)
+                    continue
+                raise last_exc
+
+            if response.status_code != 200:
+                raise self._build_api_error(response)
+
+            return response.json()
+
+        raise last_exc  # pragma: no cover
+
+    def _backoff(self, attempt):
+        """Sleep for exponential backoff duration."""
+        wait = self.backoff_factor * (2 ** attempt)
+        logger.info(
+            "Request failed, retrying in %.1fs (attempt %d/%d)...",
+            wait,
+            attempt + 1,
+            self.retries,
+        )
+        time.sleep(wait)
+
+    @staticmethod
+    def _build_rate_limit_error(response):
+        """Build a SahmkRateLimitError from a 429 response."""
+        headers = response.headers
+        retry_after = None
+        raw = headers.get("Retry-After")
+        if raw:
+            try:
+                retry_after = float(raw)
+            except (ValueError, TypeError):
+                pass
+
+        def _header_int(name):
+            val = headers.get(name)
+            if val:
+                try:
+                    return int(val)
+                except (ValueError, TypeError):
+                    pass
+            return None
+
+        return SahmkRateLimitError(
+            "Rate limit exceeded.",
+            response=response,
+            retry_after=retry_after,
+            rate_limit=_header_int("X-RateLimit-Limit"),
+            rate_remaining=_header_int("X-RateLimit-Remaining"),
+            rate_reset=headers.get("X-RateLimit-Reset"),
+        )
+
+    @staticmethod
+    def _build_api_error(response):
+        """Build a SahmkError from a non-200 response."""
+        try:
+            body = response.json()
+            err = body.get("error", {})
+            code = err.get("code", "UNKNOWN")
+            message = err.get("message", response.text)
+        except (ValueError, KeyError):
+            code = "UNKNOWN"
+            message = response.text
+        return SahmkError(
+            f"API error {response.status_code}: {message}",
+            status_code=response.status_code,
+            error_code=code,
+            response=response,
+        )
+
+    def _rate_limit_wait(self, response, attempt):
+        """Determine wait time for a 429 response, preferring Retry-After header."""
+        raw = response.headers.get("Retry-After")
+        if raw:
+            try:
+                return float(raw)
+            except (ValueError, TypeError):
+                pass
+        return self.backoff_factor * (2 ** attempt)
 
     # -------------------------------------------------------------------------
     # Quotes
