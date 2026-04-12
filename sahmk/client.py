@@ -17,6 +17,8 @@ WS_URL = "wss://app.sahmk.sa/ws/v1/stocks/"
 logger = logging.getLogger("sahmk")
 
 _RETRIABLE_STATUS_CODES = frozenset({500, 502, 503, 504})
+_MARKET_INDEX_ALIASES = {"NOMUC": "NOMU"}
+_VALID_MARKET_INDEXES = frozenset({"TASI", "NOMU"})
 
 
 class SahmkError(Exception):
@@ -59,6 +61,18 @@ class SahmkRateLimitError(SahmkError):
         self.rate_limit = rate_limit
         self.rate_remaining = rate_remaining
         self.rate_reset = rate_reset
+
+
+class SahmkInvalidIndexError(SahmkError):
+    """Raised when an invalid market index is supplied or returned by the API."""
+
+    def __init__(self, message, response=None):
+        super().__init__(
+            message,
+            status_code=400,
+            error_code="INVALID_INDEX",
+            response=response,
+        )
 
 
 class SahmkClient:
@@ -217,6 +231,11 @@ class SahmkClient:
         except (ValueError, KeyError):
             code = "UNKNOWN"
             message = response.text
+        if response.status_code == 400 and code == "INVALID_INDEX":
+            return SahmkInvalidIndexError(
+                f"Invalid market index: {message}",
+                response=response,
+            )
         return SahmkError(
             f"API error {response.status_code}: {message}",
             status_code=response.status_code,
@@ -233,6 +252,29 @@ class SahmkClient:
             except (ValueError, TypeError):
                 pass
         return self.backoff_factor * (2 ** attempt)
+
+    @staticmethod
+    def _normalize_market_index(index):
+        """Normalize/validate market index query parameter."""
+        if index is None:
+            return None
+        normalized = str(index).strip().upper()
+        normalized = _MARKET_INDEX_ALIASES.get(normalized, normalized)
+        if normalized not in _VALID_MARKET_INDEXES:
+            raise SahmkInvalidIndexError(
+                "Index must be one of: TASI, NOMU (NOMUC is accepted as NOMU)."
+            )
+        return normalized
+
+    def _market_params(self, limit=None, index=None):
+        """Build validated query params for market endpoints."""
+        params = {}
+        if limit is not None:
+            params["limit"] = limit
+        normalized_index = self._normalize_market_index(index)
+        if normalized_index is not None:
+            params["index"] = normalized_index
+        return params or None
 
     # -------------------------------------------------------------------------
     # Quotes
@@ -304,94 +346,122 @@ class SahmkClient:
     # Market
     # -------------------------------------------------------------------------
 
-    def market_summary(self):
+    def market_summary(self, index=None):
         """
         Get market overview (TASI index, change, volume, market_mood).
+
+        Args:
+            index: Optional market index ("TASI" or "NOMU"). "NOMUC" alias
+                   is accepted and normalized to "NOMU".
 
         Returns:
             MarketSummary object
         """
         from .models import MarketSummary
-        data = self._request("GET", "/market/summary/")
+        data = self._request(
+            "GET",
+            "/market/summary/",
+            params=self._market_params(index=index),
+        )
         return MarketSummary.from_dict(data)
 
-    def gainers(self, limit=None):
+    def gainers(self, limit=None, index=None):
         """
         Get top gaining stocks.
 
         Args:
             limit: Number of results (default: 10, max: 50)
+            index: Optional market index ("TASI" or "NOMU"). "NOMUC" alias
+                   is accepted and normalized to "NOMU".
 
         Returns:
             MarketMoversResponse with .stocks list
         """
         from .models import MarketMoversResponse
-        params = {}
-        if limit is not None:
-            params["limit"] = limit
-        data = self._request("GET", "/market/gainers/", params=params or None)
+        data = self._request(
+            "GET",
+            "/market/gainers/",
+            params=self._market_params(limit=limit, index=index),
+        )
         return MarketMoversResponse.from_dict(data, list_key="gainers")
 
-    def losers(self, limit=None):
+    def losers(self, limit=None, index=None):
         """
         Get top losing stocks.
 
         Args:
             limit: Number of results (default: 10, max: 50)
+            index: Optional market index ("TASI" or "NOMU"). "NOMUC" alias
+                   is accepted and normalized to "NOMU".
 
         Returns:
             MarketMoversResponse with .stocks list
         """
         from .models import MarketMoversResponse
-        params = {}
-        if limit is not None:
-            params["limit"] = limit
-        data = self._request("GET", "/market/losers/", params=params or None)
+        data = self._request(
+            "GET",
+            "/market/losers/",
+            params=self._market_params(limit=limit, index=index),
+        )
         return MarketMoversResponse.from_dict(data, list_key="losers")
 
-    def volume_leaders(self, limit=None):
+    def volume_leaders(self, limit=None, index=None):
         """
         Get stocks with highest trading volume.
 
         Args:
             limit: Number of results (default: 10, max: 50)
+            index: Optional market index ("TASI" or "NOMU"). "NOMUC" alias
+                   is accepted and normalized to "NOMU".
 
         Returns:
             MarketMoversResponse with .stocks list
         """
         from .models import MarketMoversResponse
-        params = {}
-        if limit is not None:
-            params["limit"] = limit
-        data = self._request("GET", "/market/volume/", params=params or None)
+        data = self._request(
+            "GET",
+            "/market/volume/",
+            params=self._market_params(limit=limit, index=index),
+        )
         return MarketMoversResponse.from_dict(data, list_key="stocks")
 
-    def value_leaders(self, limit=None):
+    def value_leaders(self, limit=None, index=None):
         """
         Get stocks with highest trading value (SAR).
 
         Args:
             limit: Number of results (default: 10, max: 50)
+            index: Optional market index ("TASI" or "NOMU"). "NOMUC" alias
+                   is accepted and normalized to "NOMU".
 
         Returns:
             MarketMoversResponse with .stocks list
         """
         from .models import MarketMoversResponse
-        params = {}
-        if limit is not None:
-            params["limit"] = limit
-        data = self._request("GET", "/market/value/", params=params or None)
+        data = self._request(
+            "GET",
+            "/market/value/",
+            params=self._market_params(limit=limit, index=index),
+        )
         return MarketMoversResponse.from_dict(data, list_key="stocks")
 
-    def sectors(self):
+    def sectors(self, index=None):
         """
         Get sector performance.
+
+        Args:
+            index: Optional market index ("TASI" or "NOMU"). "NOMUC" alias
+                   is accepted and normalized to "NOMU".
 
         Returns:
             SectorsResponse with .sectors list
         """
         from .models import SectorsResponse
-        data = self._request("GET", "/market/sectors/")
+        data = self._request(
+            "GET",
+            "/market/sectors/",
+            params=self._market_params(index=index),
+        )
         return SectorsResponse.from_dict(data)
 
     # -------------------------------------------------------------------------

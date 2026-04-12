@@ -74,6 +74,10 @@ class TestArgumentParser:
         assert args.view == "gainers"
         assert args.limit == 5
 
+        # Test with market index
+        args = parser.parse_args(["market", "summary", "--index", "NOMUC"])
+        assert args.index == "NOMUC"
+
     def test_parser_historical_command(self):
         """Test historical command parsing."""
         parser = _build_parser()
@@ -261,6 +265,23 @@ class TestMainMarketCommand:
         assert "11950.35" in captured.out
 
     @responses.activate
+    def test_market_summary_with_index(self, capsys, sample_market_summary_response, monkeypatch):
+        """Test market summary command with index parameter."""
+        monkeypatch.setenv("SAHMK_API_KEY", "test_key")
+        responses.add(
+            responses.GET,
+            "https://app.sahmk.sa/api/v1/market/summary/",
+            json={**sample_market_summary_response, "index": "NOMU"},
+            status=200,
+        )
+
+        exit_code = main(["market", "summary", "--index", "NOMUC"])
+
+        assert exit_code == 0
+        request = responses.calls[0].request
+        assert "index=NOMU" in request.url
+
+    @responses.activate
     def test_market_gainers(self, capsys, sample_gainers_response, monkeypatch):
         """Test market gainers command."""
         monkeypatch.setenv("SAHMK_API_KEY", "test_key")
@@ -277,6 +298,22 @@ class TestMainMarketCommand:
         captured = capsys.readouterr()
         assert "gainers" in captured.out.lower() or "1234" in captured.out
 
+    @responses.activate
+    def test_market_gainers_with_index(self, capsys, sample_gainers_response, monkeypatch):
+        """Test market gainers command with index parameter."""
+        monkeypatch.setenv("SAHMK_API_KEY", "test_key")
+        responses.add(
+            responses.GET,
+            "https://app.sahmk.sa/api/v1/market/gainers/",
+            json={**sample_gainers_response, "index": "NOMU"},
+            status=200,
+        )
+
+        exit_code = main(["market", "gainers", "--index", "NOMU"])
+
+        assert exit_code == 0
+        request = responses.calls[0].request
+        assert "index=NOMU" in request.url
     @responses.activate
     def test_market_losers(self, capsys, sample_losers_response, monkeypatch):
         """Test market losers command."""
@@ -436,6 +473,18 @@ class TestMainErrorHandling:
         captured = capsys.readouterr()
         err_data = json.loads(captured.err)
         assert err_data["status_code"] == 404
+
+    def test_market_invalid_index_error(self, capsys, monkeypatch):
+        """Test invalid market index returns structured client error."""
+        monkeypatch.setenv("SAHMK_API_KEY", "test_key")
+
+        exit_code = main(["market", "summary", "--index", "INVALID"])
+
+        assert exit_code == 1
+        captured = capsys.readouterr()
+        err_data = json.loads(captured.err)
+        assert err_data["code"] == "INVALID_INDEX"
+        assert err_data["status_code"] == 400
 
 
 class TestMainCompactOutput:

@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "sahmk"
-version = "0.6.1"
-description = "Lightweight Python client for the SAHMK Developer API."
+version = "0.6.2"
+description = "Python SDK for SAHMK API with typed models, CLI, and market index scoping."
 readme = "README.md"
 requires-python = ">=3.9"
 license = "MIT"

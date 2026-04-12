@@ -4,7 +4,7 @@ import json
 import pytest
 import requests
 import responses
-from sahmk import SahmkClient, SahmkRateLimitError
+from sahmk import SahmkClient, SahmkRateLimitError, SahmkInvalidIndexError
 from sahmk.client import SahmkError, BASE_URL, WS_URL
 
 
@@ -108,6 +108,23 @@ class TestClientRequestMethod:
         assert exc_info.value.status_code == 404
         assert exc_info.value.error_code == "SYMBOL_NOT_FOUND"
         assert "Symbol not found" in str(exc_info.value)
+
+    @responses.activate
+    def test_request_invalid_index_error(self, mock_client):
+        """Test 400 INVALID_INDEX maps to specialized exception."""
+        responses.add(
+            responses.GET,
+            f"{mock_client.base_url}/market/summary/",
+            json={"error": {"code": "INVALID_INDEX", "message": "Invalid index"}},
+            status=400,
+        )
+
+        with pytest.raises(SahmkInvalidIndexError) as exc_info:
+            mock_client._request("GET", "/market/summary/", params={"index": "BAD"})
+
+        assert exc_info.value.status_code == 400
+        assert exc_info.value.error_code == "INVALID_INDEX"
+        assert isinstance(exc_info.value, SahmkError)
 
     @responses.activate
     def test_request_api_error_without_json(self, mock_client):
@@ -318,9 +335,27 @@ class TestMarketEndpoints:
 
         result = mock_client.market_summary()
         
+        assert result["index"] == "TASI"
+        assert result["is_delayed"] is True
         assert result["index_value"] == 11950.35
         assert result["index_change"] == 125.40
         assert result["market_mood"] == "bullish"
+
+    @responses.activate
+    def test_market_summary_with_index(self, mock_client, sample_market_summary_response):
+        """Test market summary with explicit market index."""
+        responses.add(
+            responses.GET,
+            f"{mock_client.base_url}/market/summary/",
+            json={**sample_market_summary_response, "index": "NOMU"},
+            status=200,
+        )
+
+        result = mock_client.market_summary(index="NOMU")
+
+        request = responses.calls[0].request
+        assert "index=NOMU" in request.url
+        assert result["index"] == "NOMU"
 
     @responses.activate
     def test_gainers_default(self, mock_client, sample_gainers_response):
@@ -351,6 +386,22 @@ class TestMarketEndpoints:
         
         request = responses.calls[0].request
         assert "limit=5" in request.url
+
+    @responses.activate
+    def test_gainers_with_index_alias(self, mock_client, sample_gainers_response):
+        """Test gainers accepts NOMUC alias and normalizes to NOMU."""
+        responses.add(
+            responses.GET,
+            f"{mock_client.base_url}/market/gainers/",
+            json={**sample_gainers_response, "index": "NOMU"},
+            status=200,
+        )
+
+        result = mock_client.gainers(index="NOMUC")
+
+        request = responses.calls[0].request
+        assert "index=NOMU" in request.url
+        assert result["index"] == "NOMU"
 
     @responses.activate
     def test_losers(self, mock_client, sample_losers_response):
@@ -426,6 +477,13 @@ class TestMarketEndpoints:
         
         assert "sectors" in result
         assert result["count"] == 2
+
+    def test_market_methods_invalid_index_raises(self, mock_client):
+        """Test invalid market index is rejected client-side."""
+        with pytest.raises(SahmkInvalidIndexError):
+            mock_client.market_summary(index="SP500")
+        with pytest.raises(SahmkInvalidIndexError):
+            mock_client.gainers(index=" ")
 
 
 class TestCompanyEndpoints:
@@ -572,6 +630,16 @@ class TestSahmkError:
         mock_response = {"data": "test"}
         error = SahmkError("Error", status_code=500, response=mock_response)
         assert error.response == mock_response
+
+
+class TestSahmkInvalidIndexError:
+    """Tests for the invalid-index exception class."""
+
+    def test_invalid_index_error_defaults(self):
+        error = SahmkInvalidIndexError("Invalid market index")
+        assert str(error) == "Invalid market index"
+        assert error.status_code == 400
+        assert error.error_code == "INVALID_INDEX"
 
 
 class TestWebsocketURL:

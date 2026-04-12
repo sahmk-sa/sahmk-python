@@ -105,6 +105,8 @@ def sample_market_summary_response():
     """Sample market summary API response (matches live API shape)."""
     return {
         "timestamp": "2026-01-28T12:20:00+00:00",
+        "index": "TASI",
+        "is_delayed": True,
         "index_value": 11950.35,
         "index_change": 125.40,
         "index_change_percent": 1.06,
@@ -120,6 +122,8 @@ def sample_market_summary_response():
 def sample_gainers_response():
     """Sample gainers API response."""
     return {
+        "index": "TASI",
+        "is_delayed": True,
         "gainers": [
             {"symbol": "1234", "name": "شركة اختبار", "change_percent": 9.95, "price": 45.20},
             {"symbol": "5678", "name": "Test Co", "change_percent": 8.50, "price": 22.10},
@@ -132,6 +136,8 @@ def sample_gainers_response():
 def sample_losers_response():
     """Sample losers API response."""
     return {
+        "index": "TASI",
+        "is_delayed": True,
         "losers": [
             {"symbol": "9012", "name": "شركة خسارة", "change_percent": -9.80, "price": 15.30},
             {"symbol": "3456", "name": "Loss Co", "change_percent": -7.25, "price": 8.90},
@@ -144,6 +150,8 @@ def sample_losers_response():
 def sample_volume_leaders_response():
     """Sample volume leaders API response."""
     return {
+        "index": "TASI",
+        "is_delayed": True,
         "stocks": [
             {"symbol": "2222", "name": "أرامكو", "volume": 25000000, "value": 812500000},
             {"symbol": "1120", "name": "الراجحي", "volume": 18000000, "value": 1587600000},
@@ -156,6 +164,8 @@ def sample_volume_leaders_response():
 def sample_value_leaders_response():
     """Sample value leaders API response."""
     return {
+        "index": "TASI",
+        "is_delayed": True,
         "stocks": [
             {"symbol": "2222", "name": "أرامكو", "value": 812500000, "volume": 25000000},
             {"symbol": "2010", "name": "سابك", "value": 625000000, "volume": 5200000},
@@ -168,6 +178,8 @@ def sample_value_leaders_response():
 def sample_sectors_response():
     """Sample sectors API response."""
     return {
+        "index": "TASI",
+        "is_delayed": True,
         "sectors": [
             {"name": "البنوك", "name_en": "Banks", "change_percent": 1.25, "performance": "up"},
             {"name": "البترول", "name_en": "Energy", "change_percent": 0.85, "performance": "up"},

@@ -67,6 +67,10 @@ def _build_parser():
         type=int,
         help="Optional limit for gainers/losers/volume/value.",
     )
+    market_parser.add_argument(
+        "--index",
+        help='Optional market index: "TASI" or "NOMU" (alias "NOMUC" accepted).',
+    )
     _compact_arg(market_parser)
 
     historical_parser = subparsers.add_parser(
@@ -212,17 +216,17 @@ def main(argv=None):
             result = client.quotes(symbols)
         elif args.command == "market":
             if args.view == "summary":
-                result = client.market_summary()
+                result = client.market_summary(index=args.index)
             elif args.view == "gainers":
-                result = client.gainers(limit=args.limit)
+                result = client.gainers(limit=args.limit, index=args.index)
             elif args.view == "losers":
-                result = client.losers(limit=args.limit)
+                result = client.losers(limit=args.limit, index=args.index)
             elif args.view == "volume":
-                result = client.volume_leaders(limit=args.limit)
+                result = client.volume_leaders(limit=args.limit, index=args.index)
             elif args.view == "value":
-                result = client.value_leaders(limit=args.limit)
+                result = client.value_leaders(limit=args.limit, index=args.index)
             else:
-                result = client.sectors()
+                result = client.sectors(index=args.index)
         elif args.command == "historical":
             result = client.historical(
                 args.symbol,

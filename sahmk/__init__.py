@@ -1,4 +1,9 @@
-from .client import SahmkClient, SahmkError, SahmkRateLimitError
+from .client import (
+    SahmkClient,
+    SahmkError,
+    SahmkRateLimitError,
+    SahmkInvalidIndexError,
+)
 from .models import (
     Quote,
     BatchQuote,
@@ -26,11 +31,12 @@ from .models import (
     Liquidity,
 )
 
-__version__ = "0.6.1"
+__version__ = "0.6.2"
 __all__ = [
     "SahmkClient",
     "SahmkError",
     "SahmkRateLimitError",
+    "SahmkInvalidIndexError",
     "Quote",
     "BatchQuote",
     "BatchQuotesResponse",

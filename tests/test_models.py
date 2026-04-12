@@ -180,6 +180,8 @@ class TestHistoricalModel:
 class TestMarketModels:
     def test_market_summary(self):
         data = {
+            "index": "TASI",
+            "is_delayed": True,
             "index_value": 11458.11,
             "index_change": 76.28,
             "index_change_percent": 0.67,
@@ -189,30 +191,42 @@ class TestMarketModels:
             "market_mood": "bullish",
         }
         ms = MarketSummary.from_dict(data)
+        assert ms.index == "TASI"
+        assert ms.is_delayed is True
         assert ms.index_value == 11458.11
         assert ms.market_mood == "bullish"
         assert ms["advancing"] == 117
 
     def test_market_movers_from_gainers(self):
         data = {
+            "index": "NOMU",
+            "is_delayed": True,
             "gainers": [{"symbol": "4194", "price": 59.5, "change_percent": 8.97}],
             "count": 1,
         }
         resp = MarketMoversResponse.from_dict(data, list_key="gainers")
         assert resp.count == 1
+        assert resp.index == "NOMU"
+        assert resp.is_delayed is True
         assert len(resp.stocks) == 1
         assert resp.stocks[0].change_percent == 8.97
 
     def test_market_movers_from_losers(self):
         data = {
+            "index": "TASI",
+            "is_delayed": False,
             "losers": [{"symbol": "9639", "change_percent": -8.89}],
             "count": 1,
         }
         resp = MarketMoversResponse.from_dict(data, list_key="losers")
+        assert resp.index == "TASI"
+        assert resp.is_delayed is False
         assert resp.stocks[0].change_percent == -8.89
 
     def test_sectors(self):
         data = {
+            "index": "TASI",
+            "is_delayed": True,
             "sectors": [
                 {"id": "TBNI", "name": "Banks", "change_percent": 0.45, "num_stocks": 10},
             ],
@@ -220,22 +234,27 @@ class TestMarketModels:
         }
         resp = SectorsResponse.from_dict(data)
         assert resp.count == 1
+        assert resp.index == "TASI"
+        assert resp.is_delayed is True
         assert isinstance(resp.sectors[0], Sector)
         assert resp.sectors[0].id == "TBNI"
         assert resp.sectors[0].num_stocks == 10
 
     @responses.activate
     def test_client_gainers(self, client):
-        data = {"gainers": [{"symbol": "4194", "change_percent": 8.97}], "count": 1}
+        data = {"index": "NOMU", "is_delayed": True, "gainers": [{"symbol": "4194", "change_percent": 8.97}], "count": 1}
         responses.add(
             responses.GET,
             f"{client.base_url}/market/gainers/",
             json=data,
             status=200,
         )
-        result = client.gainers()
+        result = client.gainers(index="nomuc")
         assert isinstance(result, MarketMoversResponse)
+        assert result.index == "NOMU"
         assert result.stocks[0].symbol == "4194"
+        request = responses.calls[0].request
+        assert "index=NOMU" in request.url
 
     @responses.activate
     def test_client_losers(self, client):

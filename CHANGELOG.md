@@ -4,6 +4,19 @@ All notable changes to the `sahmk` Python SDK will be documented in this file.
 
 This project follows [Semantic Versioning](https://semver.org/).
 
+## [0.6.2] — 2026-04-12
+
+### Added
+
+- Market endpoints now accept optional `index` in SDK methods and CLI (`--index`) for `TASI`/`NOMU`, with `NOMUC` alias normalized to `NOMU`
+- New `SahmkInvalidIndexError` for clear handling of invalid market index usage (`INVALID_INDEX`)
+- Market typed response models now expose top-level `index` and `is_delayed` fields
+
+### Changed
+
+- Market method docs/examples updated to reflect index scoping and delayed-vs-realtime response metadata
+- Test coverage expanded for index query propagation, alias normalization, and invalid-index failures
+
 ## [0.6.1] — 2026-04-02
 
 ### Fixed

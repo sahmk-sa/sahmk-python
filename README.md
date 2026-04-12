@@ -7,7 +7,7 @@ A lightweight Python client for the [SAHMK Developer API](https://sahmk.sa/devel
 - **Real-time quotes** — live prices for 350+ Tadawul stocks
 - **Batch quotes** — up to 50 stocks in a single request
 - **Historical data** — daily/weekly/monthly OHLCV with custom date ranges
-- **Market overview** — TASI index, gainers, losers, volume/value leaders, sectors
+- **Market overview** — index-scoped market data (TASI/NOMU), gainers, losers, volume/value leaders, sectors
 - **Company info** — fundamentals, technicals, valuation, analyst consensus (by plan)
 - **Financials** — income statements, balance sheets, cash flow
 - **Dividends** — history, yield, upcoming payments
@@ -43,6 +43,10 @@ print(f"{quote['name_en']}: {quote['price']} SAR ({quote['change_percent']}%)")
 market = client.market_summary()
 print(f"TASI: {market['index_value']} ({market['index_change_percent']}%)")
 
+# Scope market endpoints by index (NOMUC alias is accepted)
+nomu = client.gainers(limit=5, index="NOMUC")
+print(f"Index: {nomu.index}, delayed: {nomu.is_delayed}")
+
 # Batch quotes (Starter+ plan)
 result = client.quotes(["2222", "1120", "4191"])
 for q in result["quotes"]:
@@ -57,6 +61,7 @@ The package also installs a CLI for instant testing:
 export SAHMK_API_KEY="your_api_key"
 sahmk quote 2222
 sahmk market gainers --limit 5
+sahmk market summary --index NOMU
 sahmk historical 2222 --from 2026-01-01 --to 2026-01-28
 sahmk company 2222
 sahmk financials 2222
@@ -91,6 +96,25 @@ Access the original API response dict via `.raw`:
 
 ```python
 raw_dict = quote.raw
+```
+
+## Market Index Scoping
+
+Market endpoints support optional `index` scoping:
+
+- Accepted values: `TASI`, `NOMU`
+- Alias: `NOMUC` (normalized to `NOMU`)
+- Omitted `index` remains backward compatible (server defaults to `TASI`)
+
+```python
+summary = client.market_summary(index="NOMUC")
+print(summary.index)       # NOMU
+print(summary.is_delayed)  # True/False by plan entitlement
+```
+
+```bash
+sahmk market summary --index NOMU
+sahmk market gainers --limit 10 --index NOMUC
 ```
 
 ## Retries and Rate Limits

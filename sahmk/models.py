@@ -237,6 +237,8 @@ class MarketSummary(_DictAccessMixin):
     """Response from GET /market/summary/."""
 
     timestamp: Optional[str] = None
+    index: Optional[str] = None
+    is_delayed: Optional[bool] = None
     index_value: Optional[float] = None
     index_change: Optional[float] = None
     index_change_percent: Optional[float] = None
@@ -251,6 +253,8 @@ class MarketSummary(_DictAccessMixin):
     def from_dict(cls, data: Dict[str, Any]) -> "MarketSummary":
         return cls(
             timestamp=data.get("timestamp"),
+            index=data.get("index"),
+            is_delayed=data.get("is_delayed"),
             index_value=data.get("index_value"),
             index_change=data.get("index_change"),
             index_change_percent=data.get("index_change_percent"),
@@ -300,12 +304,20 @@ class MarketMoversResponse(_DictAccessMixin):
 
     stocks: List[MarketMover] = field(default_factory=list)
     count: Optional[int] = None
+    index: Optional[str] = None
+    is_delayed: Optional[bool] = None
     raw: Dict[str, Any] = field(default_factory=dict, repr=False)
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any], list_key: str = "stocks") -> "MarketMoversResponse":
         items = [MarketMover.from_dict(s) for s in data.get(list_key, [])]
-        return cls(stocks=items, count=data.get("count"), raw=data)
+        return cls(
+            stocks=items,
+            count=data.get("count"),
+            index=data.get("index"),
+            is_delayed=data.get("is_delayed"),
+            raw=data,
+        )
 
 
 @dataclass
@@ -341,12 +353,20 @@ class SectorsResponse(_DictAccessMixin):
 
     sectors: List[Sector] = field(default_factory=list)
     count: Optional[int] = None
+    index: Optional[str] = None
+    is_delayed: Optional[bool] = None
     raw: Dict[str, Any] = field(default_factory=dict, repr=False)
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "SectorsResponse":
         items = [Sector.from_dict(s) for s in data.get("sectors", [])]
-        return cls(sectors=items, count=data.get("count"), raw=data)
+        return cls(
+            sectors=items,
+            count=data.get("count"),
+            index=data.get("index"),
+            is_delayed=data.get("is_delayed"),
+            raw=data,
+        )
 
 
 # ---------------------------------------------------------------------------
