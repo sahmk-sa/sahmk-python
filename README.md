@@ -1,18 +1,18 @@
 # SAHMK Python SDK
 
-A lightweight Python client for the [SAHMK Developer API](https://sahmk.sa/developers) — real-time and historical Saudi stock market (Tadawul) data.
+Official Python SDK for [Sahmk](https://sahmk.sa/developers) — Saudi market data and richer market workflows for developers.
+
+Use one client for live Tadawul quotes, market-level insights, company/fundamental data, financials, events, and historical series.
 
 ## Features
 
-- **Real-time quotes** — live prices for 350+ Tadawul stocks
-- **Batch quotes** — up to 50 stocks in a single request
-- **Historical data** — daily/weekly/monthly OHLCV with custom date ranges
-- **Market overview** — index-scoped market data (TASI/NOMU), gainers, losers, volume/value leaders, sectors
-- **Company info** — fundamentals, technicals, valuation, analyst consensus (by plan)
-- **Financials** — income statements, balance sheets, cash flow
-- **Dividends** — history, yield, upcoming payments
-- **Events** — AI-generated stock event summaries
-- **WebSocket streaming** — real-time price updates pushed to you (Pro+ plan)
+- **Real-time quotes** for 350+ Tadawul stocks
+- **Batch quotes** for up to 50 symbols per request
+- **Historical OHLCV** data with date-range support
+- **Market overview** with index scoping (`TASI`/`NOMU`)
+- **Company/fundamental** data (plan-dependent fields)
+- **Financials, dividends, and events** endpoints (by plan)
+- **WebSocket streaming** for real-time updates (Pro+)
 
 ## Installation
 
@@ -20,7 +20,7 @@ A lightweight Python client for the [SAHMK Developer API](https://sahmk.sa/devel
 pip install sahmk
 ```
 
-Or clone this repo for local development:
+For local development:
 
 ```bash
 git clone https://github.com/sahmk-sa/sahmk-python.git
@@ -28,40 +28,55 @@ cd sahmk-python
 pip install -r requirements.txt
 ```
 
+## Security
+
+- Use environment variables for API keys (recommended: `SAHMK_API_KEY`).
+- Never commit API keys to source control, notebooks, or logs.
+- If a key is exposed, rotate it immediately from your Sahmk dashboard.
+
 ## Quick Start
+
+```python
+import os
+from sahmk import SahmkClient
+
+client = SahmkClient(os.environ["SAHMK_API_KEY"])
+
+quote = client.quote("2222")
+print(f"{quote['name_en']}: {quote['price']} SAR ({quote['change_percent']}%)")
+
+market = client.market_summary(index="TASI")
+print(f"TASI: {market['index_value']} ({market['index_change_percent']}%)")
+
+# Batch quotes are Starter+ plan.
+for q in client.quotes(["2222", "1120", "7010"])["quotes"]:
+    print(f"{q['symbol']}: {q['price']}")
+```
+
+## Production Reliability
+
+- The client retries transient failures: **HTTP 429** and **5xx** errors.
+- Defaults: `retries=3`, `backoff_factor=0.5` (0.5s, 1s, 2s).
+- Invalid symbols, authentication failures, and plan-access errors are **not retryable**.
 
 ```python
 from sahmk import SahmkClient
 
-client = SahmkClient("your_api_key")
-
-# Get a stock quote
-quote = client.quote("2222")
-print(f"{quote['name_en']}: {quote['price']} SAR ({quote['change_percent']}%)")
-
-# Get market summary
-market = client.market_summary()
-print(f"TASI: {market['index_value']} ({market['index_change_percent']}%)")
-
-# Scope market endpoints by index (NOMUC alias is accepted)
-nomu = client.gainers(limit=5, index="NOMUC")
-print(f"Index: {nomu.index}, delayed: {nomu.is_delayed}")
-
-# Batch quotes (Starter+ plan)
-result = client.quotes(["2222", "1120", "4191"])
-for q in result["quotes"]:
-    print(f"{q['symbol']}: {q['price']}")
+client = SahmkClient("your_api_key", retries=3, backoff_factor=0.5)
 ```
 
-## CLI Quick Start
+## Plan Behavior
 
-The package also installs a CLI for instant testing:
+Some methods are plan-gated (for example `quotes`, `historical`, `financials`, `dividends`, `events`).
+When your plan does not include an endpoint, the API returns an error response (not retried automatically).
+
+## CLI Quick Start
 
 ```bash
 export SAHMK_API_KEY="your_api_key"
 sahmk quote 2222
-sahmk market gainers --limit 5
 sahmk market summary --index NOMU
+sahmk market gainers --limit 5 --index NOMUC
 sahmk historical 2222 --from 2026-01-01 --to 2026-01-28
 sahmk company 2222
 sahmk financials 2222
@@ -78,99 +93,32 @@ sahmk quote 2222 --api-key your_api_key
 
 ## Typed Responses
 
-All client methods return typed objects with IDE autocompletion — while preserving full backwards compatibility with dict-style access:
+All methods return typed objects with IDE autocomplete while preserving dict-style access.
 
 ```python
 quote = client.quote("2222")
-
-# New: typed attribute access
 print(quote.price)
 print(quote.liquidity.net_value)
 
-# Still works: dict-style access (backwards compatible)
+# Backwards-compatible dict access
 print(quote["price"])
 print(quote.get("volume"))
-```
-
-Access the original API response dict via `.raw`:
-
-```python
-raw_dict = quote.raw
+print(quote.raw)
 ```
 
 ## Market Index Scoping
 
-Market endpoints support optional `index` scoping:
+Supported values:
 
-- Accepted values: `TASI`, `NOMU`
-- Alias: `NOMUC` (normalized to `NOMU`)
-- Omitted `index` remains backward compatible (server defaults to `TASI`)
+- `TASI`
+- `NOMU`
+- `NOMUC` alias (normalized to `NOMU`)
 
 ```python
 summary = client.market_summary(index="NOMUC")
 print(summary.index)       # NOMU
-print(summary.is_delayed)  # True/False by plan entitlement
+print(summary.is_delayed)  # True/False by entitlement
 ```
-
-```bash
-sahmk market summary --index NOMU
-sahmk market gainers --limit 10 --index NOMUC
-```
-
-## Retries and Rate Limits
-
-The client automatically retries transient failures (429 rate-limit and 5xx server errors) with exponential backoff:
-
-```python
-# Defaults: 3 retries, 0.5s backoff factor (0.5s, 1s, 2s delays)
-client = SahmkClient("your_api_key")
-
-# Customize retry behavior
-client = SahmkClient("your_api_key", retries=5, backoff_factor=1.0)
-
-# Disable retries entirely
-client = SahmkClient("your_api_key", retries=0)
-```
-
-Rate limit errors include metadata from the API:
-
-```python
-from sahmk import SahmkRateLimitError
-
-try:
-    quote = client.quote("2222")
-except SahmkRateLimitError as e:
-    print(f"Rate limited. Retry after: {e.retry_after}s")
-    print(f"Remaining: {e.rate_remaining}/{e.rate_limit}")
-```
-
-## Get Your API Key
-
-1. Sign up at [sahmk.sa/developers](https://sahmk.sa/developers)
-2. Verify your email
-3. Go to Dashboard → API Keys → Create Key
-4. Copy your key (starts with `shmk_live_` or `shmk_test_`)
-
-## Plans
-
-| Plan | Price | Requests/Day | WebSocket |
-|------|-------|-------------|-----------|
-| Free | 0 SAR | 100 | - |
-| Starter | 149 SAR/mo | 5,000 | - |
-| Pro | 499 SAR/mo | 50,000 | Yes |
-| Enterprise | [`Contact us`](https://www.sahmk.sa/contactus?type=api-support) | Unlimited | Yes |
-
-## Examples
-
-Check the [`examples/`](examples/) directory:
-
-| File | Description |
-|------|-------------|
-| [`quote.py`](examples/quote.py) | Get a single stock quote |
-| [`batch_quotes.py`](examples/batch_quotes.py) | Fetch multiple stocks at once |
-| [`historical.py`](examples/historical.py) | Historical price data |
-| [`market_summary.py`](examples/market_summary.py) | Market overview and movers |
-| [`websocket_stream.py`](examples/websocket_stream.py) | Real-time WebSocket streaming (Pro+) |
 
 ## API Reference
 
@@ -181,7 +129,7 @@ Base URL: `https://app.sahmk.sa/api/v1`
 | `GET /quote/{symbol}/` | Free | Stock quote |
 | `GET /quotes/?symbols=...` | Starter+ | Batch quotes (up to 50) |
 | `GET /historical/{symbol}/` | Starter+ | Historical OHLCV data |
-| `GET /market/summary/` | Free | Market overview & TASI index |
+| `GET /market/summary/` | Free | Market overview |
 | `GET /market/gainers/` | Free | Top gainers |
 | `GET /market/losers/` | Free | Top losers |
 | `GET /market/volume/` | Free | Volume leaders |
@@ -189,16 +137,22 @@ Base URL: `https://app.sahmk.sa/api/v1`
 | `GET /market/sectors/` | Free | Sector performance |
 | `GET /company/{symbol}/` | Free+ | Company info (tiered by plan) |
 | `GET /financials/{symbol}/` | Starter+ | Financial statements |
-| `GET /dividends/{symbol}/` | Starter+ | Dividend history & yield |
+| `GET /dividends/{symbol}/` | Starter+ | Dividend history and yield |
 | `GET /events/` | Pro+ | AI-generated stock events |
 
-All endpoints require the `X-API-Key` header.
+All endpoints require `X-API-Key`.
 
 Full docs: [sahmk.sa/developers/docs](https://sahmk.sa/developers/docs)
 
-Changelog: [CHANGELOG.md](CHANGELOG.md)
+## Examples
 
-Roadmap: [ROADMAP.md](ROADMAP.md)
+Example scripts:
+
+- [quote.py](https://github.com/sahmk-sa/sahmk-python/blob/main/examples/quote.py)
+- [batch_quotes.py](https://github.com/sahmk-sa/sahmk-python/blob/main/examples/batch_quotes.py)
+- [historical.py](https://github.com/sahmk-sa/sahmk-python/blob/main/examples/historical.py)
+- [market_summary.py](https://github.com/sahmk-sa/sahmk-python/blob/main/examples/market_summary.py)
+- [websocket_stream.py](https://github.com/sahmk-sa/sahmk-python/blob/main/examples/websocket_stream.py)
 
 ## WebSocket Streaming (Pro+)
 
@@ -209,36 +163,16 @@ from sahmk import SahmkClient
 client = SahmkClient("your_api_key")
 
 async def on_quote(msg):
-    symbol = msg["symbol"]
-    price = msg["data"]["price"]
-    print(f"{symbol}: {price}")
+    print(f"{msg['symbol']}: {msg['data']['price']}")
 
 asyncio.run(client.stream(["2222", "1120"], on_quote=on_quote))
 ```
 
-### Auto-Reconnect
+The streaming client auto-reconnects with exponential backoff and resubscribes symbols.
 
-The streaming client automatically reconnects on disconnect with exponential backoff. All symbols are resubscribed after reconnection.
-
-```python
-async def on_disconnect(reason):
-    print(f"Disconnected: {reason}")
-
-async def on_reconnect(attempt):
-    print(f"Reconnecting (attempt #{attempt})...")
-
-await client.stream(
-    ["2222", "1120"],
-    on_quote=on_quote,
-    on_disconnect=on_disconnect,
-    on_reconnect=on_reconnect,
-    # max_reconnect_attempts=0 means unlimited (default)
-    # Set to -1 to disable reconnect entirely
-)
-```
-
-Connection URL: `wss://app.sahmk.sa/ws/v1/stocks/?api_key=YOUR_KEY`
+Changelog: [CHANGELOG.md](https://github.com/sahmk-sa/sahmk-python/blob/main/CHANGELOG.md)  
+Roadmap: [ROADMAP.md](https://github.com/sahmk-sa/sahmk-python/blob/main/ROADMAP.md)
 
 ## License
 
-MIT — see [LICENSE](LICENSE)
+MIT — see [LICENSE](https://github.com/sahmk-sa/sahmk-python/blob/main/LICENSE)
