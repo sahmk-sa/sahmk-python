@@ -1,10 +1,15 @@
 """Unit tests for the SahmkClient class."""
 
-import json
 import pytest
 import requests
 import responses
-from sahmk import SahmkClient, SahmkRateLimitError, SahmkInvalidIndexError
+from sahmk import (
+    SahmkClient,
+    SahmkRateLimitError,
+    SahmkInvalidIndexError,
+    SahmkAmbiguousIdentifierError,
+    SahmkUnknownIdentifierError,
+)
 from sahmk.client import SahmkError, BASE_URL, WS_URL
 
 
@@ -211,6 +216,61 @@ class TestQuoteEndpoint:
         result = mock_client.quote("1120")
         assert result["symbol"] == "1120"
 
+    @responses.activate
+    def test_quote_with_arabic_name_identifier(self, mock_client, sample_quote_response):
+        """Test quote accepts Arabic company name identifier."""
+        identifier = "أرامكو السعودية"
+        responses.add(
+            responses.GET,
+            f"{mock_client.base_url}/quote/{identifier}/",
+            json={
+                **sample_quote_response,
+                "requested_identifier": identifier,
+                "resolved_symbol": "2222",
+                "resolution": {
+                    "input": identifier,
+                    "symbol": "2222",
+                    "matched_by": "name_ar",
+                    "match_type": "exact",
+                    "is_exact": True,
+                },
+            },
+            status=200,
+        )
+
+        result = mock_client.quote(identifier)
+
+        assert result["symbol"] == "2222"
+        assert result.requested_identifier == identifier
+        assert result.resolved_symbol == "2222"
+        assert result.resolution is not None
+        assert result.resolution.matched_by == "name_ar"
+
+    @responses.activate
+    def test_quote_with_english_alias_identifier(self, mock_client, sample_quote_response):
+        """Test quote accepts English name/alias identifier."""
+        identifier = "Aramco"
+        responses.add(
+            responses.GET,
+            f"{mock_client.base_url}/quote/{identifier}/",
+            json={
+                **sample_quote_response,
+                "requested_identifier": identifier,
+                "resolved_symbol": "2222",
+                "matched_by": "alias",
+                "match_type": "fuzzy",
+            },
+            status=200,
+        )
+
+        result = mock_client.quote(identifier)
+
+        assert result["symbol"] == "2222"
+        assert result.requested_identifier == identifier
+        assert result.resolved_symbol == "2222"
+        assert result.resolution is not None
+        assert result.resolution.matched_by == "alias"
+
 
 class TestQuotesEndpoint:
     """Tests for the batch quotes endpoint."""
@@ -232,9 +292,15 @@ class TestQuotesEndpoint:
         assert result["quotes"][0]["symbol"] == "2222"
         assert result["quotes"][1]["symbol"] == "1120"
 
+        request = responses.calls[0].request
+        assert (
+            "identifiers=2222%2C1120" in request.url
+            or "identifiers=2222,1120" in request.url
+        )
+
     @responses.activate
     def test_quotes_url_params(self, mock_client, sample_quotes_response):
-        """Test batch quotes sends correct URL parameters."""
+        """Test batch quotes sends identifier-capable query parameters."""
         responses.add(
             responses.GET,
             f"{mock_client.base_url}/quotes/",
@@ -245,7 +311,118 @@ class TestQuotesEndpoint:
         mock_client.quotes(["2222", "1120", "2010"])
         
         request = responses.calls[0].request
-        assert "symbols=2222%2C1120%2C2010" in request.url or "symbols=2222,1120,2010" in request.url
+        assert (
+            "identifiers=2222%2C1120%2C2010" in request.url
+            or "identifiers=2222,1120,2010" in request.url
+        )
+
+    @responses.activate
+    def test_quotes_multiple_identifier_types(self, mock_client):
+        """Test batch quotes with symbol, Arabic name, and English alias."""
+        responses.add(
+            responses.GET,
+            f"{mock_client.base_url}/quotes/",
+            json={
+                "quotes": [
+                    {"symbol": "2222", "requested_identifier": "2222"},
+                    {"symbol": "1120", "requested_identifier": "الراجحي"},
+                    {
+                        "symbol": "2010",
+                        "requested_identifier": "SABIC",
+                        "resolution": {"input": "SABIC", "matched_by": "alias"},
+                    },
+                ],
+                "count": 3,
+                "resolved": [
+                    {"input": "2222", "symbol": "2222", "matched_by": "symbol"},
+                    {"input": "الراجحي", "symbol": "1120", "matched_by": "name_ar"},
+                    {"input": "SABIC", "symbol": "2010", "matched_by": "alias"},
+                ],
+            },
+            status=200,
+        )
+
+        result = mock_client.quotes(["2222", "الراجحي", "SABIC"])
+
+        request = responses.calls[0].request
+        assert "identifiers=" in request.url
+        assert result.count == 3
+        assert len(result.resolved) == 3
+        assert result.resolved[1].matched_by == "name_ar"
+        assert result["quotes"][2]["symbol"] == "2010"
+
+    @responses.activate
+    def test_quotes_exposes_ambiguous_and_unknown_lists(self, mock_client):
+        """Test batch response includes ambiguous and unknown identifiers."""
+        responses.add(
+            responses.GET,
+            f"{mock_client.base_url}/quotes/",
+            json={
+                "quotes": [{"symbol": "2222", "requested_identifier": "أرامكو"}],
+                "count": 1,
+                "ambiguous": [
+                    {
+                        "identifier": "البنك",
+                        "candidates": [{"symbol": "1120"}, {"symbol": "1150"}],
+                    }
+                ],
+                "unknown": [{"identifier": "NOT_A_STOCK"}],
+            },
+            status=200,
+        )
+
+        result = mock_client.quotes(["أرامكو", "البنك", "NOT_A_STOCK"])
+
+        assert result.count == 1
+        assert len(result.ambiguous) == 1
+        assert len(result.unknown) == 1
+        assert result.unknown[0]["identifier"] == "NOT_A_STOCK"
+
+    @responses.activate
+    def test_quotes_falls_back_to_legacy_symbols_param(self, mock_client):
+        """Test legacy backend fallback from identifiers to symbols query key."""
+        responses.add(
+            responses.GET,
+            f"{mock_client.base_url}/quotes/",
+            json={
+                "error": {
+                    "code": "VALIDATION",
+                    "message": "symbols query parameter is required",
+                }
+            },
+            status=400,
+        )
+        responses.add(
+            responses.GET,
+            f"{mock_client.base_url}/quotes/",
+            json={"quotes": [{"symbol": "2222"}], "count": 1},
+            status=200,
+        )
+
+        result = mock_client.quotes(["2222"])
+
+        assert result.count == 1
+        assert len(responses.calls) == 2
+        first_request = responses.calls[0].request.url
+        second_request = responses.calls[1].request.url
+        assert "identifiers=2222" in first_request
+        assert "symbols=2222" in second_request
+
+    @responses.activate
+    def test_quotes_accepts_single_string_identifier(self, mock_client):
+        """Test convenience support for passing one identifier as a string."""
+        responses.add(
+            responses.GET,
+            f"{mock_client.base_url}/quotes/",
+            json={"quotes": [{"symbol": "2222"}], "count": 1},
+            status=200,
+        )
+
+        result = mock_client.quotes("2222")
+
+        assert result.count == 1
+        request = responses.calls[0].request.url
+        assert "identifiers=2222" in request
 
     def test_quotes_empty_list(self, mock_client):
         """Test that empty symbol list raises ValueError."""
@@ -630,6 +807,82 @@ class TestSahmkError:
         mock_response = {"data": "test"}
         error = SahmkError("Error", status_code=500, response=mock_response)
         assert error.response == mock_response
+
+    @responses.activate
+    def test_ambiguous_identifier_error(self, mock_client):
+        """Test ambiguous identifier maps to specialized exception."""
+        responses.add(
+            responses.GET,
+            f"{mock_client.base_url}/quote/البنك/",
+            json={
+                "error": {
+                    "code": "AMBIGUOUS_IDENTIFIER",
+                    "message": "Multiple stocks match this identifier",
+                    "details": {
+                        "identifier": "البنك",
+                        "candidates": [
+                            {"symbol": "1120", "name": "الراجحي"},
+                            {"symbol": "1150", "name": "الإنماء"},
+                        ],
+                    },
+                }
+            },
+            status=400,
+        )
+
+        with pytest.raises(SahmkAmbiguousIdentifierError) as exc_info:
+            mock_client.quote("البنك")
+
+        assert exc_info.value.identifier == "البنك"
+        assert len(exc_info.value.candidates) == 2
+        assert exc_info.value.status_code == 400
+        assert exc_info.value.error_code == "AMBIGUOUS_IDENTIFIER"
+
+    @responses.activate
+    def test_unknown_identifier_error(self, mock_client):
+        """Test unknown identifier maps to specialized exception."""
+        responses.add(
+            responses.GET,
+            f"{mock_client.base_url}/quote/NOT_A_STOCK/",
+            json={
+                "error": {
+                    "code": "UNKNOWN_IDENTIFIER",
+                    "message": "Identifier not found",
+                    "details": {"identifier": "NOT_A_STOCK"},
+                }
+            },
+            status=404,
+        )
+
+        with pytest.raises(SahmkUnknownIdentifierError) as exc_info:
+            mock_client.quote("NOT_A_STOCK")
+
+        assert exc_info.value.identifier == "NOT_A_STOCK"
+        assert exc_info.value.status_code == 404
+        assert exc_info.value.error_code == "UNKNOWN_IDENTIFIER"
+
+    @responses.activate
+    def test_invalid_symbol_maps_to_unknown_identifier_preserving_code(self, mock_client):
+        """Test INVALID_SYMBOL maps to unknown identifier exception preserving code."""
+        responses.add(
+            responses.GET,
+            f"{mock_client.base_url}/quote/XXXX/",
+            json={
+                "error": {
+                    "code": "INVALID_SYMBOL",
+                    "message": "Stock symbol not found in TASI or Nomu",
+                    "details": {"identifier": "XXXX"},
+                }
+            },
+            status=404,
+        )
+
+        with pytest.raises(SahmkUnknownIdentifierError) as exc_info:
+            mock_client.quote("XXXX")
+
+        assert exc_info.value.identifier == "XXXX"
+        assert exc_info.value.error_code == "INVALID_SYMBOL"
+        assert exc_info.value.status_code == 404
 
 
 class TestSahmkInvalidIndexError:

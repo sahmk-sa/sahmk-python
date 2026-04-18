@@ -75,6 +75,77 @@ class SahmkInvalidIndexError(SahmkError):
         )
 
 
+class SahmkIdentifierResolutionError(SahmkError):
+    """Base exception for identifier-resolution failures."""
+
+    def __init__(
+        self,
+        message,
+        status_code=None,
+        error_code=None,
+        response=None,
+        identifier=None,
+        details=None,
+    ):
+        super().__init__(
+            message,
+            status_code=status_code,
+            error_code=error_code,
+            response=response,
+        )
+        self.identifier = identifier
+        self.details = details or {}
+
+
+class SahmkAmbiguousIdentifierError(SahmkIdentifierResolutionError):
+    """Raised when the input maps to multiple possible stocks."""
+
+    def __init__(
+        self,
+        message,
+        response=None,
+        identifier=None,
+        candidates=None,
+        details=None,
+        status_code=400,
+        error_code="AMBIGUOUS_IDENTIFIER",
+    ):
+        merged_details = dict(details or {})
+        if candidates is not None:
+            merged_details.setdefault("candidates", candidates)
+        super().__init__(
+            message,
+            status_code=status_code,
+            error_code=error_code,
+            response=response,
+            identifier=identifier,
+            details=merged_details,
+        )
+        self.candidates = merged_details.get("candidates", [])
+
+
+class SahmkUnknownIdentifierError(SahmkIdentifierResolutionError):
+    """Raised when an identifier cannot be resolved to any stock."""
+
+    def __init__(
+        self,
+        message,
+        response=None,
+        identifier=None,
+        details=None,
+        status_code=404,
+        error_code="UNKNOWN_IDENTIFIER",
+    ):
+        super().__init__(
+            message,
+            status_code=status_code,
+            error_code=error_code,
+            response=response,
+            identifier=identifier,
+            details=details,
+        )
+
+
 class SahmkClient:
     """
     SAHMK Developer API client.
@@ -223,11 +294,14 @@ class SahmkClient:
     @staticmethod
     def _build_api_error(response):
         """Build a SahmkError from a non-200 response."""
+        details = {}
         try:
             body = response.json()
             err = body.get("error", {})
             code = err.get("code", "UNKNOWN")
             message = err.get("message", response.text)
+            if isinstance(err.get("details"), dict):
+                details = err.get("details")
         except (ValueError, KeyError):
             code = "UNKNOWN"
             message = response.text
@@ -235,6 +309,31 @@ class SahmkClient:
             return SahmkInvalidIndexError(
                 f"Invalid market index: {message}",
                 response=response,
+            )
+        identifier = details.get("identifier") or details.get("input")
+        if code in {"AMBIGUOUS_IDENTIFIER", "IDENTIFIER_AMBIGUOUS"}:
+            candidates = details.get("candidates", [])
+            candidate_text = ""
+            if candidates:
+                shown = candidates[:5]
+                candidate_text = f" Candidates: {shown}"
+            return SahmkAmbiguousIdentifierError(
+                f"Ambiguous identifier '{identifier or '?'}': {message}.{candidate_text}",
+                response=response,
+                identifier=identifier,
+                candidates=candidates,
+                details=details,
+                status_code=response.status_code,
+                error_code=code,
+            )
+        if code in {"UNKNOWN_IDENTIFIER", "IDENTIFIER_NOT_FOUND", "INVALID_SYMBOL"}:
+            return SahmkUnknownIdentifierError(
+                f"Unknown identifier '{identifier or '?'}': {message}",
+                response=response,
+                identifier=identifier,
+                details=details,
+                status_code=response.status_code,
+                error_code=code,
             )
         return SahmkError(
             f"API error {response.status_code}: {message}",
@@ -280,38 +379,67 @@ class SahmkClient:
     # Quotes
     # -------------------------------------------------------------------------
 
-    def quote(self, symbol):
+    def quote(self, identifier):
         """
-        Get a stock quote.
+        Get a stock quote by symbol or resolvable identifier.
 
         Args:
-            symbol: Stock symbol (e.g., "2222" for Aramco)
+            identifier: Stock symbol, Arabic name, English name, or alias
+                        (e.g., "2222", "أرامكو السعودية", "Aramco")
 
         Returns:
             Quote object (supports dict-style access via [] for backwards compat)
         """
         from .models import Quote
-        data = self._request("GET", f"/quote/{symbol}/")
+        data = self._request("GET", f"/quote/{identifier}/")
         return Quote.from_dict(data)
 
-    def quotes(self, symbols):
+    @staticmethod
+    def _is_legacy_quotes_param_error(exc):
+        """Detect old-backend validation errors when identifiers param is unknown."""
+        if not isinstance(exc, SahmkError) or exc.status_code != 400:
+            return False
+        if exc.error_code in {
+            "VALIDATION",
+            "MISSING_SYMBOLS",
+            "MISSING_PARAMETER",
+            "UNKNOWN_PARAMETER",
+        }:
+            return True
+        return "symbols" in str(exc).lower()
+
+    def quotes(self, identifiers):
         """
         Get batch quotes for multiple stocks (Starter+ plan).
 
         Args:
-            symbols: List of stock symbols (up to 50)
+            identifiers: List of symbols/names/aliases (up to 50). Existing
+                         symbol-only usage remains fully supported.
 
         Returns:
             BatchQuotesResponse with .quotes list and .count
         """
         from .models import BatchQuotesResponse
-        if not symbols:
+        if isinstance(identifiers, str):
+            identifiers = [identifiers]
+        if not identifiers:
             raise ValueError("At least one symbol is required")
-        if len(symbols) > 50:
+        if len(identifiers) > 50:
             raise SahmkError("Maximum 50 symbols per batch request")
-        data = self._request(
-            "GET", "/quotes/", params={"symbols": ",".join(symbols)}
-        )
+        joined = ",".join(str(identifier) for identifier in identifiers)
+
+        # Prefer the new backend contract first. If the backend is older and
+        # rejects `identifiers`, transparently fall back to `symbols`.
+        try:
+            data = self._request(
+                "GET",
+                "/quotes/",
+                params={"identifiers": joined},
+            )
+        except SahmkError as exc:
+            if not self._is_legacy_quotes_param_error(exc):
+                raise
+            data = self._request("GET", "/quotes/", params={"symbols": joined})
         return BatchQuotesResponse.from_dict(data)
 
     # -------------------------------------------------------------------------

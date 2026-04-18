@@ -47,6 +47,41 @@ class _DictAccessMixin:
 # ---------------------------------------------------------------------------
 
 @dataclass
+class IdentifierResolution(_DictAccessMixin):
+    """Resolution metadata for identifier-capable quote endpoints."""
+
+    input: Optional[str] = None
+    requested_identifier: Optional[str] = None
+    symbol: Optional[str] = None
+    name: Optional[str] = None
+    name_en: Optional[str] = None
+    match_type: Optional[str] = None
+    matched_by: Optional[str] = None
+    confidence: Optional[float] = None
+    is_exact: Optional[bool] = None
+    candidates: List[Dict[str, Any]] = field(default_factory=list)
+    raw: Dict[str, Any] = field(default_factory=dict, repr=False)
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "IdentifierResolution":
+        return cls(
+            input=data.get("input"),
+            requested_identifier=data.get("requested_identifier")
+            or data.get("identifier")
+            or data.get("input"),
+            symbol=data.get("symbol") or data.get("resolved_symbol"),
+            name=data.get("name"),
+            name_en=data.get("name_en"),
+            match_type=data.get("match_type"),
+            matched_by=data.get("matched_by"),
+            confidence=data.get("confidence"),
+            is_exact=data.get("is_exact"),
+            candidates=data.get("candidates", []),
+            raw=data,
+        )
+
+
+@dataclass
 class Liquidity(_DictAccessMixin):
     """Money-flow data embedded in a quote."""
 
@@ -78,6 +113,9 @@ class Quote(_DictAccessMixin):
     """A single stock quote from GET /quote/{symbol}/."""
 
     symbol: Optional[str] = None
+    requested_identifier: Optional[str] = None
+    resolved_symbol: Optional[str] = None
+    resolution: Optional[IdentifierResolution] = None
     name: Optional[str] = None
     name_en: Optional[str] = None
     price: Optional[float] = None
@@ -100,8 +138,43 @@ class Quote(_DictAccessMixin):
     def from_dict(cls, data: Dict[str, Any]) -> "Quote":
         liq_data = data.get("liquidity")
         liq = Liquidity.from_dict(liq_data) if isinstance(liq_data, dict) else None
+        resolution_data = data.get("resolution")
+        if not isinstance(resolution_data, dict):
+            has_resolution_hint = any(
+                key in data
+                for key in (
+                    "requested_identifier",
+                    "identifier",
+                    "resolved_symbol",
+                    "match_type",
+                    "matched_by",
+                )
+            )
+            if has_resolution_hint:
+                resolution_data = {
+                    "input": data.get("requested_identifier") or data.get("identifier"),
+                    "requested_identifier": (
+                        data.get("requested_identifier") or data.get("identifier")
+                    ),
+                    "symbol": data.get("resolved_symbol") or data.get("symbol"),
+                    "name": data.get("name"),
+                    "name_en": data.get("name_en"),
+                    "match_type": data.get("match_type"),
+                    "matched_by": data.get("matched_by"),
+                    "confidence": data.get("confidence"),
+                    "is_exact": data.get("is_exact"),
+                }
+        resolution = (
+            IdentifierResolution.from_dict(resolution_data)
+            if isinstance(resolution_data, dict)
+            else None
+        )
         return cls(
             symbol=data.get("symbol"),
+            requested_identifier=data.get("requested_identifier")
+            or data.get("identifier"),
+            resolved_symbol=data.get("resolved_symbol") or data.get("symbol"),
+            resolution=resolution,
             name=data.get("name"),
             name_en=data.get("name_en"),
             price=data.get("price"),
@@ -127,6 +200,9 @@ class BatchQuote(_DictAccessMixin):
     """A quote item from the batch GET /quotes/ response."""
 
     symbol: Optional[str] = None
+    requested_identifier: Optional[str] = None
+    resolved_symbol: Optional[str] = None
+    resolution: Optional[IdentifierResolution] = None
     name: Optional[str] = None
     name_en: Optional[str] = None
     price: Optional[float] = None
@@ -140,8 +216,43 @@ class BatchQuote(_DictAccessMixin):
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "BatchQuote":
+        resolution_data = data.get("resolution")
+        if not isinstance(resolution_data, dict):
+            has_resolution_hint = any(
+                key in data
+                for key in (
+                    "requested_identifier",
+                    "identifier",
+                    "resolved_symbol",
+                    "match_type",
+                    "matched_by",
+                )
+            )
+            if has_resolution_hint:
+                resolution_data = {
+                    "input": data.get("requested_identifier") or data.get("identifier"),
+                    "requested_identifier": (
+                        data.get("requested_identifier") or data.get("identifier")
+                    ),
+                    "symbol": data.get("resolved_symbol") or data.get("symbol"),
+                    "name": data.get("name"),
+                    "name_en": data.get("name_en"),
+                    "match_type": data.get("match_type"),
+                    "matched_by": data.get("matched_by"),
+                    "confidence": data.get("confidence"),
+                    "is_exact": data.get("is_exact"),
+                }
+        resolution = (
+            IdentifierResolution.from_dict(resolution_data)
+            if isinstance(resolution_data, dict)
+            else None
+        )
         return cls(
             symbol=data.get("symbol"),
+            requested_identifier=data.get("requested_identifier")
+            or data.get("identifier"),
+            resolved_symbol=data.get("resolved_symbol") or data.get("symbol"),
+            resolution=resolution,
             name=data.get("name"),
             name_en=data.get("name_en"),
             price=data.get("price"),
@@ -161,12 +272,27 @@ class BatchQuotesResponse(_DictAccessMixin):
 
     quotes: List[BatchQuote] = field(default_factory=list)
     count: Optional[int] = None
+    resolved: List[IdentifierResolution] = field(default_factory=list)
+    ambiguous: List[Dict[str, Any]] = field(default_factory=list)
+    unknown: List[Dict[str, Any]] = field(default_factory=list)
     raw: Dict[str, Any] = field(default_factory=dict, repr=False)
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "BatchQuotesResponse":
         quotes = [BatchQuote.from_dict(q) for q in data.get("quotes", [])]
-        return cls(quotes=quotes, count=data.get("count"), raw=data)
+        resolved = [
+            IdentifierResolution.from_dict(r)
+            for r in data.get("resolved", [])
+            if isinstance(r, dict)
+        ]
+        return cls(
+            quotes=quotes,
+            count=data.get("count"),
+            resolved=resolved,
+            ambiguous=data.get("ambiguous", []),
+            unknown=data.get("unknown", []),
+            raw=data,
+        )
 
 
 # ---------------------------------------------------------------------------

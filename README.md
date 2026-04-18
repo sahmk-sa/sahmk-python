@@ -53,6 +53,42 @@ for q in client.quotes(["2222", "1120", "7010"])["quotes"]:
     print(f"{q['symbol']}: {q['price']}")
 ```
 
+## Identifier Resolution (Quotes)
+
+`quote()` and `quotes()` accept either traditional symbols or resolvable identifiers:
+
+- Symbol: `"2222"`
+- Arabic company name: `"أرامكو السعودية"`
+- English company name/alias: `"Aramco"`
+
+Symbol input always works. Name/alias input requires backend identifier-resolution support.
+For batch quotes, the SDK first tries `identifiers=...`, then automatically falls back to
+legacy `symbols=...` when connected to older backends.
+
+```python
+q1 = client.quote("2222")              # classic symbol usage
+q2 = client.quote("أرامكو السعودية")   # Arabic identifier
+q3 = client.quote("Aramco")            # English alias
+
+batch = client.quotes(["2222", "الراجحي", "SABIC"])
+for q in batch.quotes:
+    print(q.requested_identifier, "=>", q.symbol)
+
+if batch.ambiguous:
+    print("Ambiguous:", batch.ambiguous)
+if batch.unknown:
+    print("Unknown:", batch.unknown)
+```
+
+When the backend returns resolution metadata, it is exposed on typed objects:
+
+```python
+quote = client.quote("Aramco")
+print(quote.requested_identifier)      # Aramco
+print(quote.resolved_symbol)           # 2222
+print(quote.resolution.matched_by)     # alias (if provided by API)
+```
+
 ## Production Reliability
 
 - The client retries transient failures: **HTTP 429** and **5xx** errors.

@@ -3,11 +3,15 @@ from .client import (
     SahmkError,
     SahmkRateLimitError,
     SahmkInvalidIndexError,
+    SahmkIdentifierResolutionError,
+    SahmkAmbiguousIdentifierError,
+    SahmkUnknownIdentifierError,
 )
 from .models import (
     Quote,
     BatchQuote,
     BatchQuotesResponse,
+    IdentifierResolution,
     HistoricalResponse,
     OHLCV,
     MarketSummary,
@@ -31,15 +35,19 @@ from .models import (
     Liquidity,
 )
 
-__version__ = "0.6.2"
+__version__ = "0.7.0"
 __all__ = [
     "SahmkClient",
     "SahmkError",
     "SahmkRateLimitError",
     "SahmkInvalidIndexError",
+    "SahmkIdentifierResolutionError",
+    "SahmkAmbiguousIdentifierError",
+    "SahmkUnknownIdentifierError",
     "Quote",
     "BatchQuote",
     "BatchQuotesResponse",
+    "IdentifierResolution",
     "HistoricalResponse",
     "OHLCV",
     "MarketSummary",

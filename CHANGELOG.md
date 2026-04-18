@@ -4,6 +4,24 @@ All notable changes to the `sahmk` Python SDK will be documented in this file.
 
 This project follows [Semantic Versioning](https://semver.org/).
 
+## [0.7.0] — 2026-04-18
+
+### Added
+
+- Identifier-resolution support for quote endpoints in the SDK: `quote()` and `quotes()` now accept symbols, Arabic names, English names, and aliases when backend resolution is enabled
+- New typed resolution metadata: `IdentifierResolution`, `Quote.requested_identifier`, `Quote.resolved_symbol`, `Quote.resolution`, plus batch-level `resolved`, `ambiguous`, and `unknown`
+- New resolution-focused exceptions: `SahmkIdentifierResolutionError`, `SahmkAmbiguousIdentifierError`, and `SahmkUnknownIdentifierError`
+
+### Changed
+
+- `quotes()` now prefers the new `identifiers` backend parameter and transparently falls back to legacy `symbols` for older backends
+- Resolution-related exceptions now preserve backend-provided `status_code` and `error_code` semantics
+- Quote docs and examples now explicitly show both classic symbol usage and identifier-based usage
+
+### Fixed
+
+- Improved backward compatibility during backend rollout by adding automatic quotes parameter fallback instead of requiring immediate backend parity
+
 ## [0.6.2] — 2026-04-12
 
 ### Added
