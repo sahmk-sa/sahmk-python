@@ -10,6 +10,7 @@ Use one client for live Tadawul quotes, market-level insights, company/fundament
 - **Batch quotes** for up to 50 symbols per request
 - **Historical OHLCV** data with date-range support
 - **Market overview** with index scoping (`TASI`/`NOMU`)
+- **Company directory** endpoint for symbol discovery
 - **Company/fundamental** data (plan-dependent fields)
 - **Financials, dividends, and events** endpoints (by plan)
 - **WebSocket streaming** for real-time updates (Pro+)
@@ -88,6 +89,44 @@ print(quote.requested_identifier)      # Aramco
 print(quote.resolved_symbol)           # 2222
 print(quote.resolution.matched_by)     # alias (if provided by API)
 ```
+
+## Company Directory / Symbol Discovery
+
+Use `companies()` as the canonical symbol-discovery path before calling
+`quote()` or `company()`.
+
+```python
+# Search by symbol or name
+directory = client.companies(search="aram")
+for row in directory["results"]:
+    print(row["symbol"], row.get("name_en") or row.get("name"))
+```
+
+```python
+# Filter by market (TASI / NOMU, NOMUC alias is accepted)
+nomu_companies = client.companies(market="NOMUC", limit=20)
+print(nomu_companies["count"])
+```
+
+```python
+# Pagination loop with offset
+offset = 0
+page_size = 100
+
+while True:
+    page = client.companies(limit=page_size, offset=offset)
+    for company in page["results"]:
+        print(company["symbol"])
+
+    offset += page_size
+    if offset >= page["total"]:
+        break
+```
+
+Recommended flow:
+
+1. Discover valid symbols with `companies()`.
+2. Call `quote(symbol)` / `company(symbol)` with a validated symbol.
 
 ## Production Reliability
 
@@ -171,6 +210,7 @@ Base URL: `https://app.sahmk.sa/api/v1`
 | `GET /market/volume/` | Free | Volume leaders |
 | `GET /market/value/` | Free | Value leaders |
 | `GET /market/sectors/` | Free | Sector performance |
+| `GET /companies/` | Free | Company directory and symbol discovery |
 | `GET /company/{symbol}/` | Free+ | Company info (tiered by plan) |
 | `GET /financials/{symbol}/` | Starter+ | Financial statements |
 | `GET /dividends/{symbol}/` | Starter+ | Dividend history and yield |

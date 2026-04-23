@@ -375,6 +375,30 @@ class SahmkClient:
             params["index"] = normalized_index
         return params or None
 
+    @staticmethod
+    def _validate_limit_offset(limit, offset):
+        """Validate shared pagination arguments."""
+        if isinstance(limit, bool) or not isinstance(limit, int):
+            raise ValueError("limit must be an integer greater than 0")
+        if limit <= 0:
+            raise ValueError("limit must be greater than 0")
+
+        if isinstance(offset, bool) or not isinstance(offset, int):
+            raise ValueError("offset must be an integer greater than or equal to 0")
+        if offset < 0:
+            raise ValueError("offset must be greater than or equal to 0")
+
+    def _companies_params(self, search=None, market=None, limit=100, offset=0):
+        """Build validated query params for the company directory endpoint."""
+        self._validate_limit_offset(limit=limit, offset=offset)
+        params = {"limit": limit, "offset": offset}
+        if search is not None:
+            params["search"] = search
+        normalized_market = self._normalize_market_index(market)
+        if normalized_market is not None:
+            params["market"] = normalized_market
+        return params
+
     # -------------------------------------------------------------------------
     # Quotes
     # -------------------------------------------------------------------------
@@ -595,6 +619,31 @@ class SahmkClient:
     # -------------------------------------------------------------------------
     # Company Data
     # -------------------------------------------------------------------------
+
+    def companies(self, search=None, market=None, limit=100, offset=0):
+        """
+        Discover listed companies/symbols for quote/company workflows.
+
+        Args:
+            search: Optional symbol/name search string.
+            market: Optional market filter ("TASI" or "NOMU"). "NOMUC" alias
+                    is accepted and normalized to "NOMU".
+            limit: Page size (must be > 0, default: 100).
+            offset: Pagination offset (must be >= 0, default: 0).
+
+        Returns:
+            Raw API response with keys such as results/count/total/limit/offset.
+        """
+        return self._request(
+            "GET",
+            "/companies/",
+            params=self._companies_params(
+                search=search,
+                market=market,
+                limit=limit,
+                offset=offset,
+            ),
+        )
 
     def company(self, symbol):
         """

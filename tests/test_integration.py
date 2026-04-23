@@ -238,6 +238,24 @@ class TestLiveMarketData:
 class TestLiveCompanyData:
     """Live tests for company data endpoints."""
 
+    def test_companies_directory(self, live_client):
+        """Test company directory endpoint for symbol discovery."""
+        result = live_client.companies(search="aram", limit=5, offset=0)
+
+        assert "results" in result
+        assert "count" in result
+        assert "total" in result
+        assert "limit" in result
+        assert "offset" in result
+        assert isinstance(result["results"], list)
+        assert result["limit"] == 5
+        assert result["offset"] == 0
+
+        print(
+            f"\nCompanies directory: {result.get('count', 0)} returned, "
+            f"{result.get('total', 0)} total"
+        )
+
     def test_company_info(self, live_client):
         """Test getting company information."""
         result = live_client.company("2222")

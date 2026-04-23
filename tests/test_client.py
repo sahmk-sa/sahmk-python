@@ -667,6 +667,94 @@ class TestCompanyEndpoints:
     """Tests for company data endpoints."""
 
     @responses.activate
+    def test_companies_with_search_market_and_pagination(self, mock_client):
+        """Test company directory query serialization with all parameters."""
+        responses.add(
+            responses.GET,
+            f"{mock_client.base_url}/companies/",
+            json={
+                "results": [{"symbol": "2222", "name_en": "Saudi Aramco"}],
+                "count": 1,
+                "total": 1,
+                "limit": 25,
+                "offset": 50,
+            },
+            status=200,
+        )
+
+        result = mock_client.companies(
+            search="aram",
+            market="tasi",
+            limit=25,
+            offset=50,
+        )
+
+        assert result["count"] == 1
+        request = responses.calls[0].request.url
+        assert "search=aram" in request
+        assert "market=TASI" in request
+        assert "limit=25" in request
+        assert "offset=50" in request
+
+    @responses.activate
+    def test_companies_market_alias_nomuc_normalizes_to_nomu(self, mock_client):
+        """Test NOMUC market alias is normalized to NOMU for company discovery."""
+        responses.add(
+            responses.GET,
+            f"{mock_client.base_url}/companies/",
+            json={
+                "results": [{"symbol": "9510", "name_en": "Nomu Co"}],
+                "count": 1,
+                "total": 1,
+                "limit": 10,
+                "offset": 0,
+            },
+            status=200,
+        )
+
+        result = mock_client.companies(market="NOMUC", limit=10, offset=0)
+
+        assert result["count"] == 1
+        request = responses.calls[0].request.url
+        assert "market=NOMU" in request
+
+    def test_companies_invalid_limit_raises(self, mock_client):
+        """Test company directory rejects non-positive limits."""
+        with pytest.raises(ValueError, match="limit must be greater than 0"):
+            mock_client.companies(limit=0)
+        with pytest.raises(ValueError, match="limit must be an integer"):
+            mock_client.companies(limit="100")
+
+    def test_companies_invalid_offset_raises(self, mock_client):
+        """Test company directory rejects negative/non-integer offsets."""
+        with pytest.raises(ValueError, match="offset must be greater than or equal to 0"):
+            mock_client.companies(offset=-1)
+        with pytest.raises(ValueError, match="offset must be an integer"):
+            mock_client.companies(offset="0")
+
+    @responses.activate
+    def test_companies_surfaces_api_errors_with_status_and_code(self, mock_client):
+        """Test company directory surfaces API error details clearly."""
+        responses.add(
+            responses.GET,
+            f"{mock_client.base_url}/companies/",
+            json={
+                "error": {
+                    "code": "INVALID_PARAM",
+                    "message": "unsupported filter combination",
+                }
+            },
+            status=400,
+        )
+
+        with pytest.raises(SahmkError) as exc_info:
+            mock_client.companies(search="*", market="TASI")
+
+        assert exc_info.value.status_code == 400
+        assert exc_info.value.error_code == "INVALID_PARAM"
+        assert "unsupported filter combination" in str(exc_info.value)
+
+    @responses.activate
     def test_company(self, mock_client, sample_company_response):
         """Test getting company info."""
         responses.add(

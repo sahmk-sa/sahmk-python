@@ -4,6 +4,23 @@ All notable changes to the `sahmk` Python SDK will be documented in this file.
 
 This project follows [Semantic Versioning](https://semver.org/).
 
+## [0.8.0] — 2026-04-24
+
+### Added
+
+- New `companies()` SDK method for canonical symbol discovery via `GET /companies/`, with support for `search`, `market`, `limit`, and `offset`
+- Discovery-first README guidance and examples for symbol/name search, market filtering, and offset-based pagination before calling `quote()`/`company()`
+- Integration coverage for live company directory response shape
+
+### Changed
+
+- Company directory market filter now uses the same normalization rules as market endpoints (`TASI`/`NOMU`, `NOMUC` alias to `NOMU`)
+- API reference docs now include `GET /companies/` as the symbol discovery endpoint
+
+### Fixed
+
+- Client-side pagination validation for company discovery now enforces `limit > 0` and `offset >= 0` before request dispatch
+
 ## [0.7.0] — 2026-04-18
 
 ### Added
