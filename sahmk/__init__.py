@@ -28,6 +28,10 @@ from .models import (
     IncomeStatement,
     BalanceSheet,
     CashFlow,
+    RatioRow,
+    RatiosResponse,
+    CompareRow,
+    CompareResponse,
     DividendsResponse,
     DividendPayment,
     Event,
@@ -35,7 +39,7 @@ from .models import (
     Liquidity,
 )
 
-__version__ = "0.8.0"
+__version__ = "0.9.0"
 __all__ = [
     "SahmkClient",
     "SahmkError",
@@ -64,6 +68,10 @@ __all__ = [
     "IncomeStatement",
     "BalanceSheet",
     "CashFlow",
+    "RatioRow",
+    "RatiosResponse",
+    "CompareRow",
+    "CompareResponse",
     "DividendsResponse",
     "DividendPayment",
     "Event",

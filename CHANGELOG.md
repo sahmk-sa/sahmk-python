@@ -4,6 +4,21 @@ All notable changes to the `sahmk` Python SDK will be documented in this file.
 
 This project follows [Semantic Versioning](https://semver.org/).
 
+## [0.9.0] — 2026-04-30
+
+### Added
+
+- Add analytics ratios and compare endpoints; enhance financials query params.
+- New `ratios(symbol, history="latest", period="annual", metrics="core")` client method
+- New `compare(symbols, metrics="core")` client method with support for symbol lists and comma-separated symbol strings
+- New typed analytics models: `RatioRow`, `RatiosResponse`, `CompareRow`, and `CompareResponse`
+
+### Changed
+
+- `financials()` now accepts optional query kwargs: `type`, `period`, `statement_period`, `history`, `metrics`, `result`, `include_quality`, and `include_partial`
+- When both `period` and `statement_period` are provided to `financials()`, `period` takes precedence
+- README now includes financials analytics examples for `financials`, `ratios`, and `compare`
+
 ## [0.8.0] — 2026-04-24
 
 ### Added

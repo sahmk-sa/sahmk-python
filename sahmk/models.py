@@ -766,6 +766,114 @@ class FinancialsResponse(_DictAccessMixin):
 
 
 # ---------------------------------------------------------------------------
+# Analytics
+# ---------------------------------------------------------------------------
+
+@dataclass
+class RatioRow(_DictAccessMixin):
+    """A single analytics ratios row."""
+
+    report_date: Optional[str] = None
+    statement_period: Optional[str] = None
+    fiscal_year: Optional[int] = None
+    fiscal_quarter: Optional[int] = None
+    ratios: Dict[str, Any] = field(default_factory=dict)
+    key_metrics: Dict[str, Any] = field(default_factory=dict)
+    raw: Dict[str, Any] = field(default_factory=dict, repr=False)
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "RatioRow":
+        return cls(
+            report_date=data.get("report_date"),
+            statement_period=data.get("statement_period"),
+            fiscal_year=data.get("fiscal_year"),
+            fiscal_quarter=data.get("fiscal_quarter"),
+            ratios=data.get("ratios") if isinstance(data.get("ratios"), dict) else {},
+            key_metrics=(
+                data.get("key_metrics")
+                if isinstance(data.get("key_metrics"), dict)
+                else {}
+            ),
+            raw=data,
+        )
+
+
+@dataclass
+class RatiosResponse(_DictAccessMixin):
+    """Response from GET /ratios/{symbol}/."""
+
+    symbol: Optional[str] = None
+    rows: List[RatioRow] = field(default_factory=list)
+    meta: Any = None
+    raw: Dict[str, Any] = field(default_factory=dict, repr=False)
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "RatiosResponse":
+        rows_data = data.get("rows", [])
+        if not isinstance(rows_data, list):
+            rows_data = []
+        return cls(
+            symbol=data.get("symbol"),
+            rows=[RatioRow.from_dict(row) for row in rows_data if isinstance(row, dict)],
+            meta=data.get("meta"),
+            raw=data,
+        )
+
+
+@dataclass
+class CompareRow(_DictAccessMixin):
+    """A single company row from compare analytics."""
+
+    symbol: Optional[str] = None
+    company_name: Optional[str] = None
+    sector: Optional[str] = None
+    market_cap: Optional[float] = None
+    current_price: Optional[float] = None
+    coverage: Any = None
+    ratios: Dict[str, Any] = field(default_factory=dict)
+    key_metrics: Dict[str, Any] = field(default_factory=dict)
+    raw: Dict[str, Any] = field(default_factory=dict, repr=False)
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "CompareRow":
+        return cls(
+            symbol=data.get("symbol"),
+            company_name=data.get("company_name"),
+            sector=data.get("sector"),
+            market_cap=data.get("market_cap"),
+            current_price=data.get("current_price"),
+            coverage=data.get("coverage"),
+            ratios=data.get("ratios") if isinstance(data.get("ratios"), dict) else {},
+            key_metrics=(
+                data.get("key_metrics")
+                if isinstance(data.get("key_metrics"), dict)
+                else {}
+            ),
+            raw=data,
+        )
+
+
+@dataclass
+class CompareResponse(_DictAccessMixin):
+    """Response from GET /compare/."""
+
+    rows: List[CompareRow] = field(default_factory=list)
+    meta: Any = None
+    raw: Dict[str, Any] = field(default_factory=dict, repr=False)
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "CompareResponse":
+        rows_data = data.get("rows", [])
+        if not isinstance(rows_data, list):
+            rows_data = []
+        return cls(
+            rows=[CompareRow.from_dict(row) for row in rows_data if isinstance(row, dict)],
+            meta=data.get("meta"),
+            raw=data,
+        )
+
+
+# ---------------------------------------------------------------------------
 # Dividends
 # ---------------------------------------------------------------------------
 

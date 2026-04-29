@@ -787,6 +787,54 @@ class TestCompanyEndpoints:
         assert result["income_statements"][0]["total_revenue"] == 418116750000.0
 
     @responses.activate
+    def test_financials_backwards_compat_no_kwargs(self, mock_client, sample_financials_response):
+        """Test financials(symbol) keeps legacy behavior without query params."""
+        responses.add(
+            responses.GET,
+            f"{mock_client.base_url}/financials/2222/",
+            json=sample_financials_response,
+            status=200,
+        )
+
+        result = mock_client.financials("2222")
+
+        assert "income_statements" in result
+        request_url = responses.calls[0].request.url
+        assert request_url.endswith("/financials/2222/")
+
+    @responses.activate
+    def test_financials_kwargs_serialization_and_period_precedence(self, mock_client):
+        """Test financials query params include new kwargs and period precedence."""
+        responses.add(
+            responses.GET,
+            f"{mock_client.base_url}/financials/1120/",
+            json={"symbol": "1120", "income_statements": [], "balance_sheets": [], "cash_flows": []},
+            status=200,
+        )
+
+        mock_client.financials(
+            "1120",
+            type="income_statement",
+            period="quarterly",
+            statement_period="annual",
+            history="3y",
+            metrics="core",
+            result="latest",
+            include_quality=True,
+            include_partial=False,
+        )
+
+        request_url = responses.calls[0].request.url
+        assert "type=income_statement" in request_url
+        assert "period=quarterly" in request_url
+        assert "statement_period=annual" not in request_url
+        assert "history=3y" in request_url
+        assert "metrics=core" in request_url
+        assert "result=latest" in request_url
+        assert "include_quality=True" in request_url
+        assert "include_partial=False" in request_url
+
+    @responses.activate
     def test_dividends(self, mock_client, sample_dividends_response):
         """Test getting dividend history."""
         responses.add(
@@ -801,6 +849,98 @@ class TestCompanyEndpoints:
         assert "trailing_12m_yield" in result
         assert "history" in result
         assert len(result["history"]) == 1
+
+
+class TestAnalyticsEndpoints:
+    """Tests for analytics ratios and compare endpoints."""
+
+    @responses.activate
+    def test_ratios_url_and_params(self, mock_client):
+        responses.add(
+            responses.GET,
+            f"{mock_client.base_url}/ratios/1120/",
+            json={
+                "symbol": "1120",
+                "rows": [],
+                "meta": {"history": "latest", "period": "annual", "metrics": "core"},
+            },
+            status=200,
+        )
+
+        result = mock_client.ratios("1120")
+
+        assert result["symbol"] == "1120"
+        request_url = responses.calls[0].request.url
+        assert "history=latest" in request_url
+        assert "period=annual" in request_url
+        assert "metrics=core" in request_url
+
+    @responses.activate
+    def test_compare_url_and_params(self, mock_client):
+        responses.add(
+            responses.GET,
+            f"{mock_client.base_url}/compare/",
+            json={
+                "rows": [],
+                "meta": {"metrics": "core"},
+            },
+            status=200,
+        )
+
+        result = mock_client.compare(["1120", "1180", "1010"])
+
+        assert "rows" in result
+        request_url = responses.calls[0].request.url
+        assert (
+            "symbols=1120%2C1180%2C1010" in request_url
+            or "symbols=1120,1180,1010" in request_url
+        )
+        assert "metrics=core" in request_url
+
+    @responses.activate
+    def test_compare_accepts_comma_string_symbols(self, mock_client):
+        responses.add(
+            responses.GET,
+            f"{mock_client.base_url}/compare/",
+            json={"rows": [], "meta": {}},
+            status=200,
+        )
+
+        mock_client.compare("1120,1180,1010", metrics="extended")
+
+        request_url = responses.calls[0].request.url
+        assert (
+            "symbols=1120%2C1180%2C1010" in request_url
+            or "symbols=1120,1180,1010" in request_url
+        )
+        assert "metrics=extended" in request_url
+
+    @responses.activate
+    def test_compare_includes_coverage_in_response(self, mock_client):
+        responses.add(
+            responses.GET,
+            f"{mock_client.base_url}/compare/",
+            json={
+                "rows": [
+                    {
+                        "symbol": "1120",
+                        "company_name": "Al Rajhi",
+                        "sector": "Banks",
+                        "market_cap": 350000000000,
+                        "current_price": 88.20,
+                        "coverage": {"quality": "full", "missing": []},
+                        "ratios": {"pe": 18.2},
+                        "key_metrics": {"revenue_growth": 0.12},
+                    }
+                ],
+                "meta": {"metrics": "core"},
+            },
+            status=200,
+        )
+
+        result = mock_client.compare(["1120"])
+
+        assert result.rows[0].coverage["quality"] == "full"
 
 
 class TestEventsEndpoint:

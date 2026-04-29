@@ -181,6 +181,16 @@ print(quote.get("volume"))
 print(quote.raw)
 ```
 
+## Financials & Analytics
+
+```python
+client.financials("1120", history="3y", result="latest")
+client.ratios("1120")
+client.ratios("1120", history="5y", period="quarterly", metrics="extended")
+client.compare(["1120", "1180", "1010"])
+client.compare(["1120", "1180", "1010", "2222"], metrics="extended")
+```
+
 ## Market Index Scoping
 
 Supported values:
@@ -213,6 +223,8 @@ Base URL: `https://app.sahmk.sa/api/v1`
 | `GET /companies/` | Free | Company directory and symbol discovery |
 | `GET /company/{symbol}/` | Free+ | Company info (tiered by plan) |
 | `GET /financials/{symbol}/` | Starter+ | Financial statements |
+| `GET /ratios/{symbol}/` | Starter+ | Analytics ratios for one company |
+| `GET /compare/` | Starter+ | Analytics comparison across companies |
 | `GET /dividends/{symbol}/` | Starter+ | Dividend history and yield |
 | `GET /events/` | Pro+ | AI-generated stock events |
 

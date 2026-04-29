@@ -24,6 +24,10 @@ from sahmk.models import (
     IncomeStatement,
     BalanceSheet,
     CashFlow,
+    RatioRow,
+    RatiosResponse,
+    CompareRow,
+    CompareResponse,
     DividendsResponse,
     DividendPayment,
     Event,
@@ -414,6 +418,84 @@ class TestDividendsModel:
         result = client.dividends("2222")
         assert isinstance(result, DividendsResponse)
         assert result.trailing_12m_yield == 4.2
+
+
+class TestAnalyticsModels:
+    RATIOS_DATA = {
+        "symbol": "1120",
+        "rows": [
+            {
+                "report_date": "2025-12-31",
+                "statement_period": "annual",
+                "fiscal_year": 2025,
+                "fiscal_quarter": 4,
+                "ratios": {
+                    "roe": 0.214,
+                    "custom_sector_ratio_x": 12.5,
+                },
+                "key_metrics": {
+                    "net_income_growth": 0.08,
+                    "custom_metric_y": 1.2,
+                },
+            }
+        ],
+        "meta": {"history": "latest", "period": "annual", "metrics": "core"},
+    }
+
+    COMPARE_DATA = {
+        "rows": [
+            {
+                "symbol": "1120",
+                "company_name": "Al Rajhi Bank",
+                "sector": "Banks",
+                "market_cap": 350000000000,
+                "current_price": 88.2,
+                "coverage": {"quality": "full", "missing": []},
+                "ratios": {"pe": 18.2, "pb": 3.1},
+                "key_metrics": {"revenue_growth": 0.1},
+            }
+        ],
+        "meta": {"metrics": "core"},
+    }
+
+    def test_ratios_dynamic_keys_do_not_crash_parsing(self):
+        resp = RatiosResponse.from_dict(self.RATIOS_DATA)
+        assert len(resp.rows) == 1
+        assert isinstance(resp.rows[0], RatioRow)
+        assert resp.rows[0].ratios["custom_sector_ratio_x"] == 12.5
+        assert resp.rows[0].key_metrics["custom_metric_y"] == 1.2
+        assert resp.meta["metrics"] == "core"
+
+    def test_compare_includes_coverage(self):
+        resp = CompareResponse.from_dict(self.COMPARE_DATA)
+        assert len(resp.rows) == 1
+        assert isinstance(resp.rows[0], CompareRow)
+        assert resp.rows[0].coverage["quality"] == "full"
+        assert resp.rows[0].ratios["pe"] == 18.2
+
+    @responses.activate
+    def test_client_returns_ratios(self, client):
+        responses.add(
+            responses.GET,
+            f"{client.base_url}/ratios/1120/",
+            json=self.RATIOS_DATA,
+            status=200,
+        )
+        result = client.ratios("1120")
+        assert isinstance(result, RatiosResponse)
+        assert result.rows[0].report_date == "2025-12-31"
+
+    @responses.activate
+    def test_client_returns_compare(self, client):
+        responses.add(
+            responses.GET,
+            f"{client.base_url}/compare/",
+            json=self.COMPARE_DATA,
+            status=200,
+        )
+        result = client.compare(["1120", "1180"])
+        assert isinstance(result, CompareResponse)
+        assert result.rows[0].company_name == "Al Rajhi Bank"
 
 
 class TestEventsModel:

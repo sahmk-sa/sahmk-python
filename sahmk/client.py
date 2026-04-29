@@ -657,16 +657,117 @@ class SahmkClient:
         data = self._request("GET", f"/company/{symbol}/")
         return CompanyModel.from_dict(data)
 
-    def financials(self, symbol):
+    @staticmethod
+    def _clean_params(params):
+        """Return params without None values (preserving False/0)."""
+        cleaned = {key: value for key, value in params.items() if value is not None}
+        return cleaned or None
+
+    @staticmethod
+    def _normalize_symbols(symbols):
+        """Accept symbol list or comma-separated string for compare-like endpoints."""
+        if isinstance(symbols, str):
+            normalized = [s.strip() for s in symbols.split(",") if s.strip()]
+        else:
+            normalized = [str(s).strip() for s in symbols if str(s).strip()]
+        if not normalized:
+            raise ValueError("At least one symbol is required")
+        return normalized
+
+    def financials(
+        self,
+        symbol,
+        type=None,
+        period=None,
+        statement_period=None,
+        history=None,
+        metrics=None,
+        result=None,
+        include_quality=None,
+        include_partial=None,
+    ):
         """
         Get financial statements (income, balance sheet, cash flow). Starter+ plan.
+
+        Args:
+            symbol: Stock symbol
+            type: Optional statement type filter
+            period: Optional period filter. If passed with statement_period,
+                    this value takes precedence.
+            statement_period: Optional statement period (ignored when period set)
+            history: Optional history selector (e.g. latest, 3y, 5y)
+            metrics: Optional metrics set selector
+            result: Optional result shape selector
+            include_quality: Optional quality metadata toggle
+            include_partial: Optional partial-period records toggle
 
         Returns:
             FinancialsResponse object
         """
         from .models import FinancialsResponse
-        data = self._request("GET", f"/financials/{symbol}/")
+        params = {
+            "type": type,
+            "period": period,
+            "history": history,
+            "metrics": metrics,
+            "result": result,
+            "include_quality": include_quality,
+            "include_partial": include_partial,
+        }
+        if period is None:
+            params["statement_period"] = statement_period
+        data = self._request(
+            "GET",
+            f"/financials/{symbol}/",
+            params=self._clean_params(params),
+        )
         return FinancialsResponse.from_dict(data)
+
+    def ratios(self, symbol, history="latest", period="annual", metrics="core"):
+        """
+        Get analytics ratios for a symbol.
+
+        Returns:
+            RatiosResponse object
+        """
+        from .models import RatiosResponse
+        data = self._request(
+            "GET",
+            f"/ratios/{symbol}/",
+            params=self._clean_params(
+                {
+                    "history": history,
+                    "period": period,
+                    "metrics": metrics,
+                }
+            ),
+        )
+        return RatiosResponse.from_dict(data)
+
+    def compare(self, symbols, metrics="core"):
+        """
+        Compare analytics across multiple symbols.
+
+        Args:
+            symbols: List of symbols or comma-separated symbol string.
+            metrics: Optional metrics set selector.
+
+        Returns:
+            CompareResponse object
+        """
+        from .models import CompareResponse
+        joined_symbols = ",".join(self._normalize_symbols(symbols))
+        data = self._request(
+            "GET",
+            "/compare/",
+            params=self._clean_params(
+                {
+                    "symbols": joined_symbols,
+                    "metrics": metrics,
+                }
+            ),
+        )
+        return CompareResponse.from_dict(data)
 
     def dividends(self, symbol):
         """
