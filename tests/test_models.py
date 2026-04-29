@@ -477,25 +477,36 @@ class TestAnalyticsModels:
     def test_client_returns_ratios(self, client):
         responses.add(
             responses.GET,
-            f"{client.base_url}/ratios/1120/",
-            json=self.RATIOS_DATA,
+            f"{client.base_url}/analytics/ratios/1120/",
+            json={
+                "symbol": "1120",
+                "ratios": self.RATIOS_DATA["rows"],
+                "meta": self.RATIOS_DATA["meta"],
+            },
             status=200,
         )
         result = client.ratios("1120")
-        assert isinstance(result, RatiosResponse)
-        assert result.rows[0].report_date == "2025-12-31"
+        assert isinstance(result, dict)
+        assert result["symbol"] == "1120"
+        assert "ratios" in result
+        assert "meta" in result
 
     @responses.activate
     def test_client_returns_compare(self, client):
         responses.add(
             responses.GET,
-            f"{client.base_url}/compare/",
-            json=self.COMPARE_DATA,
+            f"{client.base_url}/analytics/compare/",
+            json={
+                "results": self.COMPARE_DATA["rows"],
+                "count": len(self.COMPARE_DATA["rows"]),
+                "meta": self.COMPARE_DATA["meta"],
+            },
             status=200,
         )
         result = client.compare(["1120", "1180"])
-        assert isinstance(result, CompareResponse)
-        assert result.rows[0].company_name == "Al Rajhi Bank"
+        assert isinstance(result, dict)
+        assert "results" in result
+        assert result["results"][0]["company_name"] == "Al Rajhi Bank"
 
 
 class TestEventsModel:

@@ -4,6 +4,17 @@ All notable changes to the `sahmk` Python SDK will be documented in this file.
 
 This project follows [Semantic Versioning](https://semver.org/).
 
+## [0.9.1] — 2026-04-30
+
+### Fixed
+
+- Fix analytics endpoint paths to match production API.
+- `ratios()` now calls `GET /analytics/ratios/{symbol}/`
+- `compare()` now calls `GET /analytics/compare/`
+- Analytics SDK methods now return the production response shape as-is:
+  - ratios: `symbol`, `ratios`, `meta`
+  - compare: `results`, `count`, `meta`
+
 ## [0.9.0] — 2026-04-30
 
 ### Added

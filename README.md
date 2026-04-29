@@ -223,8 +223,8 @@ Base URL: `https://app.sahmk.sa/api/v1`
 | `GET /companies/` | Free | Company directory and symbol discovery |
 | `GET /company/{symbol}/` | Free+ | Company info (tiered by plan) |
 | `GET /financials/{symbol}/` | Starter+ | Financial statements |
-| `GET /ratios/{symbol}/` | Starter+ | Analytics ratios for one company |
-| `GET /compare/` | Starter+ | Analytics comparison across companies |
+| `GET /analytics/ratios/{symbol}/` | Starter+ | Analytics ratios for one company |
+| `GET /analytics/compare/` | Starter+ | Analytics comparison across companies |
 | `GET /dividends/{symbol}/` | Starter+ | Dividend history and yield |
 | `GET /events/` | Pro+ | AI-generated stock events |
 

@@ -858,10 +858,10 @@ class TestAnalyticsEndpoints:
     def test_ratios_url_and_params(self, mock_client):
         responses.add(
             responses.GET,
-            f"{mock_client.base_url}/ratios/1120/",
+            f"{mock_client.base_url}/analytics/ratios/1120/",
             json={
                 "symbol": "1120",
-                "rows": [],
+                "ratios": [],
                 "meta": {"history": "latest", "period": "annual", "metrics": "core"},
             },
             status=200,
@@ -879,9 +879,10 @@ class TestAnalyticsEndpoints:
     def test_compare_url_and_params(self, mock_client):
         responses.add(
             responses.GET,
-            f"{mock_client.base_url}/compare/",
+            f"{mock_client.base_url}/analytics/compare/",
             json={
-                "rows": [],
+                "results": [],
+                "count": 0,
                 "meta": {"metrics": "core"},
             },
             status=200,
@@ -889,7 +890,7 @@ class TestAnalyticsEndpoints:
 
         result = mock_client.compare(["1120", "1180", "1010"])
 
-        assert "rows" in result
+        assert "results" in result
         request_url = responses.calls[0].request.url
         assert (
             "symbols=1120%2C1180%2C1010" in request_url
@@ -901,8 +902,8 @@ class TestAnalyticsEndpoints:
     def test_compare_accepts_comma_string_symbols(self, mock_client):
         responses.add(
             responses.GET,
-            f"{mock_client.base_url}/compare/",
-            json={"rows": [], "meta": {}},
+            f"{mock_client.base_url}/analytics/compare/",
+            json={"results": [], "count": 0, "meta": {}},
             status=200,
         )
 
@@ -919,9 +920,9 @@ class TestAnalyticsEndpoints:
     def test_compare_includes_coverage_in_response(self, mock_client):
         responses.add(
             responses.GET,
-            f"{mock_client.base_url}/compare/",
+            f"{mock_client.base_url}/analytics/compare/",
             json={
-                "rows": [
+                "results": [
                     {
                         "symbol": "1120",
                         "company_name": "Al Rajhi",
@@ -933,6 +934,7 @@ class TestAnalyticsEndpoints:
                         "key_metrics": {"revenue_growth": 0.12},
                     }
                 ],
+                "count": 1,
                 "meta": {"metrics": "core"},
             },
             status=200,
@@ -940,7 +942,7 @@ class TestAnalyticsEndpoints:
 
         result = mock_client.compare(["1120"])
 
-        assert result.rows[0].coverage["quality"] == "full"
+        assert result["results"][0]["coverage"]["quality"] == "full"
 
 
 class TestEventsEndpoint:

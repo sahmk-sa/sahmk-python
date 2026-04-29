@@ -728,12 +728,11 @@ class SahmkClient:
         Get analytics ratios for a symbol.
 
         Returns:
-            RatiosResponse object
+            Raw API response dict
         """
-        from .models import RatiosResponse
-        data = self._request(
+        return self._request(
             "GET",
-            f"/ratios/{symbol}/",
+            f"/analytics/ratios/{symbol}/",
             params=self._clean_params(
                 {
                     "history": history,
@@ -742,7 +741,6 @@ class SahmkClient:
                 }
             ),
         )
-        return RatiosResponse.from_dict(data)
 
     def compare(self, symbols, metrics="core"):
         """
@@ -753,13 +751,12 @@ class SahmkClient:
             metrics: Optional metrics set selector.
 
         Returns:
-            CompareResponse object
+            Raw API response dict
         """
-        from .models import CompareResponse
         joined_symbols = ",".join(self._normalize_symbols(symbols))
-        data = self._request(
+        return self._request(
             "GET",
-            "/compare/",
+            "/analytics/compare/",
             params=self._clean_params(
                 {
                     "symbols": joined_symbols,
@@ -767,7 +764,6 @@ class SahmkClient:
                 }
             ),
         )
-        return CompareResponse.from_dict(data)
 
     def dividends(self, symbol):
         """
