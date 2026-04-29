@@ -168,7 +168,9 @@ sahmk quote 2222 --api-key your_api_key
 
 ## Typed Responses
 
-All methods return typed objects with IDE autocomplete while preserving dict-style access.
+Most methods return typed objects with IDE autocomplete while preserving dict-style access.
+Analytics methods (`ratios`, `compare`) return raw API dict responses to match the
+production contract exactly.
 
 ```python
 quote = client.quote("2222")
@@ -190,6 +192,15 @@ client.ratios("1120", history="5y", period="quarterly", metrics="extended")
 client.compare(["1120", "1180", "1010"])
 client.compare(["1120", "1180", "1010", "2222"], metrics="extended")
 ```
+
+Financials responses no longer include `meta`. Existing financial statement sections
+(`income_statements`, `balance_sheets`, `cash_flows`) are unchanged.
+
+Analytics `meta` remains minimal and includes only:
+
+- `period`
+- `metrics`
+- `warnings`
 
 ## Market Index Scoping
 
@@ -240,6 +251,7 @@ Example scripts:
 - [batch_quotes.py](https://github.com/sahmk-sa/sahmk-python/blob/main/examples/batch_quotes.py)
 - [historical.py](https://github.com/sahmk-sa/sahmk-python/blob/main/examples/historical.py)
 - [market_summary.py](https://github.com/sahmk-sa/sahmk-python/blob/main/examples/market_summary.py)
+- [analytics.py](https://github.com/sahmk-sa/sahmk-python/blob/main/examples/analytics.py)
 - [websocket_stream.py](https://github.com/sahmk-sa/sahmk-python/blob/main/examples/websocket_stream.py)
 
 ## WebSocket Streaming (Pro+)

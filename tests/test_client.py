@@ -785,6 +785,7 @@ class TestCompanyEndpoints:
         assert "income_statements" in result
         assert "balance_sheets" in result
         assert result["income_statements"][0]["total_revenue"] == 418116750000.0
+        assert "meta" not in result
 
     @responses.activate
     def test_financials_backwards_compat_no_kwargs(self, mock_client, sample_financials_response):
@@ -801,6 +802,7 @@ class TestCompanyEndpoints:
         assert "income_statements" in result
         request_url = responses.calls[0].request.url
         assert request_url.endswith("/financials/2222/")
+        assert "meta" not in result
 
     @responses.activate
     def test_financials_kwargs_serialization_and_period_precedence(self, mock_client):
@@ -862,7 +864,7 @@ class TestAnalyticsEndpoints:
             json={
                 "symbol": "1120",
                 "ratios": [],
-                "meta": {"history": "latest", "period": "annual", "metrics": "core"},
+                "meta": {"period": "annual", "metrics": "core", "warnings": []},
             },
             status=200,
         )
@@ -874,6 +876,10 @@ class TestAnalyticsEndpoints:
         assert "history=latest" in request_url
         assert "period=annual" in request_url
         assert "metrics=core" in request_url
+        assert set(result["meta"].keys()) == {"period", "metrics", "warnings"}
+        assert "applied_profile" not in result["meta"]
+        assert "plan" not in result["meta"]
+        assert "source" not in result["meta"]
 
     @responses.activate
     def test_compare_url_and_params(self, mock_client):
@@ -883,7 +889,7 @@ class TestAnalyticsEndpoints:
             json={
                 "results": [],
                 "count": 0,
-                "meta": {"metrics": "core"},
+                "meta": {"period": "annual", "metrics": "core", "warnings": []},
             },
             status=200,
         )
@@ -897,13 +903,18 @@ class TestAnalyticsEndpoints:
             or "symbols=1120,1180,1010" in request_url
         )
         assert "metrics=core" in request_url
+        assert set(result["meta"].keys()) == {"period", "metrics", "warnings"}
 
     @responses.activate
     def test_compare_accepts_comma_string_symbols(self, mock_client):
         responses.add(
             responses.GET,
             f"{mock_client.base_url}/analytics/compare/",
-            json={"results": [], "count": 0, "meta": {}},
+            json={
+                "results": [],
+                "count": 0,
+                "meta": {"period": "annual", "metrics": "extended", "warnings": []},
+            },
             status=200,
         )
 
@@ -935,7 +946,7 @@ class TestAnalyticsEndpoints:
                     }
                 ],
                 "count": 1,
-                "meta": {"metrics": "core"},
+                "meta": {"period": "annual", "metrics": "core", "warnings": []},
             },
             status=200,
         )

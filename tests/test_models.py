@@ -439,7 +439,7 @@ class TestAnalyticsModels:
                 },
             }
         ],
-        "meta": {"history": "latest", "period": "annual", "metrics": "core"},
+        "meta": {"period": "annual", "metrics": "core", "warnings": []},
     }
 
     COMPARE_DATA = {
@@ -455,7 +455,7 @@ class TestAnalyticsModels:
                 "key_metrics": {"revenue_growth": 0.1},
             }
         ],
-        "meta": {"metrics": "core"},
+        "meta": {"period": "annual", "metrics": "core", "warnings": []},
     }
 
     def test_ratios_dynamic_keys_do_not_crash_parsing(self):
@@ -465,6 +465,7 @@ class TestAnalyticsModels:
         assert resp.rows[0].ratios["custom_sector_ratio_x"] == 12.5
         assert resp.rows[0].key_metrics["custom_metric_y"] == 1.2
         assert resp.meta["metrics"] == "core"
+        assert set(resp.meta.keys()) == {"period", "metrics", "warnings"}
 
     def test_compare_includes_coverage(self):
         resp = CompareResponse.from_dict(self.COMPARE_DATA)
