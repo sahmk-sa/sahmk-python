@@ -4,6 +4,14 @@ All notable changes to the `sahmk` Python SDK will be documented in this file.
 
 This project follows [Semantic Versioning](https://semver.org/).
 
+## [0.9.2] — 2026-04-30
+
+### Changed
+
+- Align docs/examples/tests with current API contract:
+  - `financials` responses do not include `meta`
+  - analytics `meta` remains minimal (`period`, `metrics`, `warnings`)
+
 ## [0.9.1] — 2026-04-30
 
 ### Fixed
