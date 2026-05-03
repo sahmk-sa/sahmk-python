@@ -1,5 +1,9 @@
 # SAHMK Python SDK
 
+![Official Source](https://img.shields.io/badge/Source-Official%20Only-0A66C2?style=for-the-badge)
+
+> **Official distribution:** GitHub (sahmk-sa) and PyPI only. Do not download binaries from third-party forks.
+
 Official Python SDK for [Sahmk](https://sahmk.sa/developers) — Saudi market data and richer market workflows for developers.
 
 Use one client for live Tadawul quotes, market-level insights, company/fundamental data, financials, events, and historical series.
