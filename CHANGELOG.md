@@ -4,6 +4,24 @@ All notable changes to the `sahmk` Python SDK will be documented in this file.
 
 This project follows [Semantic Versioning](https://semver.org/).
 
+## [0.10.0] — 2026-05-29
+
+### Added
+
+- Production-style WebSocket example with long-running process patterns: structured logging, graceful shutdown handling, reconnect visibility, and explicit automatic resubscribe behavior.
+- WebSocket test coverage for backend-contract close codes (`4401`, `4403`) and runtime `connected.limits` behaviors.
+
+### Changed
+
+- WebSocket streaming now applies jitter to reconnect backoff delays to reduce synchronized reconnect spikes.
+- Subscription chunk sizing now uses backend-provided runtime limits from `type="connected"` payloads (for example, `max_symbols_per_call`) instead of fixed chunking when limits are available.
+- Streaming docs now align with backend contract semantics for close codes, per-connection subscription state, and non-disconnecting `type="error"` messages.
+
+### Fixed
+
+- Streaming now treats clean server-side socket closure as a reconnectable disconnect, preserving long-running stream reliability during backend restarts/deploys.
+- Close code handling now correctly treats `4401` (authentication failure) and `4403` (entitlement/plan/account access failure) as non-retryable stream errors.
+
 ## [0.9.3] — 2026-05-03
 
 ### Changed

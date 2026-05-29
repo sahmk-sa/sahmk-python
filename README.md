@@ -272,7 +272,21 @@ async def on_quote(msg):
 asyncio.run(client.stream(["2222", "1120"], on_quote=on_quote))
 ```
 
-The streaming client auto-reconnects with exponential backoff and resubscribes symbols.
+The streaming client auto-reconnects with exponential backoff + jitter and
+resubscribes symbols after reconnect.
+
+Runtime behavior (verified with backend contract):
+
+- Authentication close code: `4401` (non-retryable)
+- Entitlement / plan / inactive / unverified close code: `4403` (non-retryable)
+- Invalid JSON / unknown action returns `type="error"` while socket stays open
+- Active subscriptions are per-connection; the SDK automatically resubscribes after reconnect
+- Symbol chunking uses backend `connected.limits.max_symbols_per_call` when available
+
+For a production-style long-running process (logging, graceful shutdown, reconnect
+visibility, and automatic resubscribe behavior), see:
+
+- [examples/websocket_stream.py](https://github.com/sahmk-sa/sahmk-python/blob/main/examples/websocket_stream.py)
 
 Changelog: [CHANGELOG.md](https://github.com/sahmk-sa/sahmk-python/blob/main/CHANGELOG.md)  
 Roadmap: [ROADMAP.md](https://github.com/sahmk-sa/sahmk-python/blob/main/ROADMAP.md)

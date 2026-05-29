@@ -374,13 +374,14 @@ class TestWebSocketReconnect:
 
         with mock.patch("websockets.connect", side_effect=make_ws):
             with mock.patch("asyncio.sleep", side_effect=mock_sleep):
-                with pytest.raises(SahmkError):
-                    await mock_client.stream(
-                        ["2222"],
-                        max_reconnect_attempts=4,
-                        initial_reconnect_delay=1.0,
-                        max_reconnect_delay=10.0,
-                    )
+                with mock.patch("random.uniform", side_effect=lambda low, high: (low + high) / 2):
+                    with pytest.raises(SahmkError):
+                        await mock_client.stream(
+                            ["2222"],
+                            max_reconnect_attempts=4,
+                            initial_reconnect_delay=1.0,
+                            max_reconnect_delay=10.0,
+                        )
 
         assert len(sleep_durations) == 4
         assert sleep_durations[0] == 1.0
@@ -406,13 +407,14 @@ class TestWebSocketReconnect:
 
         with mock.patch("websockets.connect", side_effect=make_ws):
             with mock.patch("asyncio.sleep", side_effect=mock_sleep):
-                with pytest.raises(SahmkError):
-                    await mock_client.stream(
-                        ["2222"],
-                        max_reconnect_attempts=5,
-                        initial_reconnect_delay=1.0,
-                        max_reconnect_delay=3.0,
-                    )
+                with mock.patch("random.uniform", side_effect=lambda low, high: (low + high) / 2):
+                    with pytest.raises(SahmkError):
+                        await mock_client.stream(
+                            ["2222"],
+                            max_reconnect_attempts=5,
+                            initial_reconnect_delay=1.0,
+                            max_reconnect_delay=3.0,
+                        )
 
         assert sleep_durations == [1.0, 2.0, 3.0, 3.0, 3.0]
 
@@ -515,6 +517,166 @@ class TestWebSocketReconnect:
         assert len(subscribe_msgs) == 2
         for msg in subscribe_msgs:
             assert set(msg["symbols"]) == set(symbols)
+
+    @pytest.mark.asyncio
+    async def test_stream_reconnects_after_clean_server_close(self, mock_client):
+        """A clean server close still triggers reconnect behavior."""
+
+        class CleanCloseWebSocket(MockWebSocket):
+            def __init__(self):
+                super().__init__(
+                    recv_sequence=[{"type": "subscribed", "symbols": ["2222"]}]
+                )
+
+            def __aiter__(self):
+                return self
+
+            async def __anext__(self):
+                raise StopAsyncIteration
+
+        call_count = 0
+
+        def make_ws(*args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                return CleanCloseWebSocket()
+            raise asyncio.CancelledError("stop test after reconnect attempt")
+
+        with mock.patch("websockets.connect", side_effect=make_ws):
+            with pytest.raises(asyncio.CancelledError):
+                await mock_client.stream(
+                    ["2222"],
+                    max_reconnect_attempts=0,
+                    initial_reconnect_delay=0.01,
+                    max_reconnect_delay=0.01,
+                )
+
+        assert call_count == 2
+
+    @pytest.mark.asyncio
+    async def test_auth_close_code_4401_is_non_retryable(self, mock_client):
+        """Close code 4401 should surface as auth failure without reconnect loop."""
+
+        from websockets.exceptions import ConnectionClosedError
+        from websockets.frames import Close
+
+        class AuthCloseWebSocket(MockWebSocket):
+            def __init__(self):
+                super().__init__(
+                    recv_sequence=[{"type": "subscribed", "symbols": ["2222"]}]
+                )
+
+            def __aiter__(self):
+                return self
+
+            async def __anext__(self):
+                raise ConnectionClosedError(Close(4401, "auth failed"), None)
+
+        call_count = 0
+
+        def make_ws(*args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            return AuthCloseWebSocket()
+
+        with mock.patch("websockets.connect", side_effect=make_ws):
+            with pytest.raises(SahmkError) as exc_info:
+                await mock_client.stream(
+                    ["2222"],
+                    max_reconnect_attempts=3,
+                    initial_reconnect_delay=0.01,
+                )
+
+        assert "close code 4401" in str(exc_info.value)
+        assert exc_info.value.status_code == 4401
+        assert call_count == 1
+
+    @pytest.mark.asyncio
+    async def test_entitlement_close_code_4403_is_non_retryable(self, mock_client):
+        """Close code 4403 should surface as access denial without reconnect."""
+
+        from websockets.exceptions import ConnectionClosedError
+        from websockets.frames import Close
+
+        class EntitlementCloseWebSocket(MockWebSocket):
+            def __init__(self):
+                super().__init__(
+                    recv_sequence=[{"type": "subscribed", "symbols": ["2222"]}]
+                )
+
+            def __aiter__(self):
+                return self
+
+            async def __anext__(self):
+                raise ConnectionClosedError(Close(4403, "plan required"), None)
+
+        connect_mock = mock.MagicMock(return_value=EntitlementCloseWebSocket())
+        with mock.patch("websockets.connect", connect_mock):
+            with pytest.raises(SahmkError) as exc_info:
+                await mock_client.stream(
+                    ["2222"],
+                    max_reconnect_attempts=3,
+                    initial_reconnect_delay=0.01,
+                )
+
+        assert "close code 4403" in str(exc_info.value)
+        assert exc_info.value.status_code == 4403
+        assert connect_mock.call_count == 1
+
+    @pytest.mark.asyncio
+    async def test_uses_connected_limits_for_subscription_chunking(self, mock_client):
+        """Chunk subscriptions should honor connected.limits.max_symbols_per_call."""
+        symbols = [str(i) for i in range(25)]
+        mock_ws = MockWebSocket(
+            connect_response={
+                "type": "connected",
+                "limits": {
+                    "max_symbols_per_connection": 100,
+                    "max_symbols_per_call": 7,
+                    "stream_modes": ["quote"],
+                },
+            },
+            recv_sequence=[
+                {"type": "subscribed", "symbols": symbols[0:7]},
+                {"type": "subscribed", "symbols": symbols[7:14]},
+                {"type": "subscribed", "symbols": symbols[14:21]},
+                {"type": "subscribed", "symbols": symbols[21:25]},
+            ],
+        )
+
+        with mock.patch("websockets.connect", return_value=mock_ws):
+            try:
+                await asyncio.wait_for(mock_client.stream(symbols), timeout=0.2)
+            except asyncio.TimeoutError:
+                pass
+
+        subscribe_calls = [
+            m for m in mock_ws.sent_messages if m.get("action") == "subscribe"
+        ]
+        assert len(subscribe_calls) == 4
+        assert [len(call["symbols"]) for call in subscribe_calls] == [7, 7, 7, 4]
+
+    @pytest.mark.asyncio
+    async def test_connected_limits_reject_symbols_over_connection_cap(self, mock_client):
+        """connected.limits.max_symbols_per_connection should be enforced."""
+        symbols = ["2222", "1120", "2010"]
+        mock_ws = MockWebSocket(
+            connect_response={
+                "type": "connected",
+                "limits": {"max_symbols_per_connection": 2, "max_symbols_per_call": 2},
+            }
+        )
+
+        with mock.patch("websockets.connect", return_value=mock_ws):
+            with pytest.raises(SahmkError) as exc_info:
+                await mock_client.stream(symbols, max_reconnect_attempts=-1)
+
+        assert "Too many symbols for this connection" in str(exc_info.value)
+        subscribe_calls = [
+            m for m in mock_ws.sent_messages if m.get("action") == "subscribe"
+        ]
+        assert subscribe_calls == []
 
 
 class TestWebSocketErrorSurfacing:
@@ -671,8 +833,8 @@ class TestStreamConnectionMethod:
     """Tests for the internal _stream_connection method."""
 
     @pytest.mark.asyncio
-    async def test_stream_connection_returns_on_clean_close(self, mock_client):
-        """_stream_connection returns normally when server closes cleanly."""
+    async def test_stream_connection_raises_on_clean_close(self, mock_client):
+        """_stream_connection surfaces clean close so stream() can reconnect."""
 
         class CleanCloseWebSocket(MockWebSocket):
             def __init__(self):
@@ -689,10 +851,11 @@ class TestStreamConnectionMethod:
         mock_ws = CleanCloseWebSocket()
 
         with mock.patch("websockets.connect", return_value=mock_ws):
-            await mock_client._stream_connection(
-                symbols=["2222"],
-                on_quote=mock.AsyncMock(),
-            )
+            with pytest.raises(ConnectionError):
+                await mock_client._stream_connection(
+                    symbols=["2222"],
+                    on_quote=mock.AsyncMock(),
+                )
 
     @pytest.mark.asyncio
     async def test_quote_callback_receives_data(self, mock_client):
@@ -727,10 +890,11 @@ class TestStreamConnectionMethod:
         mock_ws = QuoteWebSocket()
 
         with mock.patch("websockets.connect", return_value=mock_ws):
-            await mock_client._stream_connection(
-                symbols=["2222"],
-                on_quote=on_quote,
-            )
+            with pytest.raises(ConnectionError):
+                await mock_client._stream_connection(
+                    symbols=["2222"],
+                    on_quote=on_quote,
+                )
 
         assert len(quotes) == 1
         assert quotes[0]["symbol"] == "2222"

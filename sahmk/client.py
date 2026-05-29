@@ -7,6 +7,7 @@ https://sahmk.sa/developers/docs
 
 import json
 import logging
+import random
 import time
 
 import requests
@@ -19,6 +20,9 @@ logger = logging.getLogger("sahmk")
 _RETRIABLE_STATUS_CODES = frozenset({500, 502, 503, 504})
 _MARKET_INDEX_ALIASES = {"NOMUC": "NOMU"}
 _VALID_MARKET_INDEXES = frozenset({"TASI", "NOMU"})
+_WS_AUTH_CLOSE_CODE = 4401
+_WS_ENTITLEMENT_CLOSE_CODE = 4403
+_DEFAULT_WS_MAX_SYMBOLS_PER_CALL = 20
 
 
 class SahmkError(Exception):
@@ -821,11 +825,14 @@ class SahmkClient:
 
         Supports automatic reconnection with exponential backoff. After a
         disconnect the client will reconnect and resubscribe to all symbols
-        automatically.
+        automatically. Per-connection subscription limits are discovered from
+        the backend `connected.limits` payload when available.
 
         Args:
-            symbols: List of stock symbols to subscribe to (max 20 per call,
-                     max 60 per connection on Pro, 200 on Enterprise)
+            symbols: List of stock symbols to subscribe to.
+                     The SDK uses backend-provided limits
+                     (`max_symbols_per_connection`, `max_symbols_per_call`)
+                     from the initial `type=connected` payload when present.
             on_quote: Async callback — on_quote(data) where data contains
                       symbol, timestamp, and quote fields (price, change, etc.)
             on_error: Async callback — on_error(error_data)
@@ -842,6 +849,13 @@ class SahmkClient:
                                      reconnect attempt (default: 1.0)
             max_reconnect_delay: Maximum delay in seconds between reconnect
                                  attempts (default: 60.0)
+
+        Notes:
+            - Close code 4401 indicates authentication failure and is not retried.
+            - Close code 4403 indicates entitlement/plan/account access failure
+              and is not retried.
+            - Backend `type="error"` messages are surfaced through `on_error`
+              and do not imply a disconnect by themselves.
 
         Usage:
             async def handle_quote(data):
@@ -898,15 +912,16 @@ class SahmkClient:
                         f"{max_reconnect_attempts} attempts: {reason}"
                     )
 
+                sleep_for = self._jittered_reconnect_delay(delay, max_reconnect_delay)
                 logger.info(
-                    "WebSocket disconnected (%s), reconnecting in %.1fs "
-                    "(attempt %d)...",
+                    "WebSocket disconnected (%s), reconnecting in %.2fs "
+                    "(attempt %d, base %.2fs)...",
                     reason,
-                    delay,
+                    sleep_for,
                     attempt,
+                    delay,
                 )
-
-                await asyncio.sleep(delay)
+                await asyncio.sleep(sleep_for)
                 delay = min(delay * 2, max_reconnect_delay)
 
                 if on_reconnect:
@@ -928,46 +943,141 @@ class SahmkClient:
 
         url = f"{WS_URL}?api_key={self.api_key}"
 
-        async with websockets.connect(url) as ws:
-            msg = json.loads(await ws.recv())
-            if msg.get("type") == "error":
-                raise SahmkError(f"WebSocket error: {msg.get('message')}")
-
-            for i in range(0, len(symbols), 20):
-                batch = symbols[i : i + 20]
-                await ws.send(
-                    json.dumps({"action": "subscribe", "symbols": batch})
-                )
-                ack = json.loads(await ws.recv())
-                if ack.get("type") == "error":
+        try:
+            async with websockets.connect(url) as ws:
+                msg = json.loads(await ws.recv())
+                if msg.get("type") == "error":
                     raise SahmkError(
-                        f"Subscribe error: {ack.get('message')}"
+                        f"WebSocket error: {msg.get('message')}",
+                        status_code=msg.get("code"),
                     )
 
-            async def _ping_loop():
-                while True:
-                    await asyncio.sleep(ping_interval)
-                    try:
-                        await ws.send(json.dumps({"action": "ping"}))
-                    except Exception:
-                        break
+                limits = self._extract_connected_limits(msg)
+                max_symbols_per_connection = limits.get("max_symbols_per_connection")
+                if (
+                    max_symbols_per_connection is not None
+                    and len(symbols) > max_symbols_per_connection
+                ):
+                    raise SahmkError(
+                        "Too many symbols for this connection: "
+                        f"{len(symbols)} requested, "
+                        f"max {max_symbols_per_connection} allowed."
+                    )
 
-            ping_task = asyncio.create_task(_ping_loop())
+                max_symbols_per_call = (
+                    limits.get("max_symbols_per_call") or _DEFAULT_WS_MAX_SYMBOLS_PER_CALL
+                )
 
-            try:
-                async for message in ws:
-                    data = json.loads(message)
-                    msg_type = data.get("type")
+                for i in range(0, len(symbols), max_symbols_per_call):
+                    batch = symbols[i : i + max_symbols_per_call]
+                    await ws.send(
+                        json.dumps({"action": "subscribe", "symbols": batch})
+                    )
+                    ack = json.loads(await ws.recv())
+                    if ack.get("type") == "error":
+                        raise SahmkError(
+                            f"Subscribe error: {ack.get('message')}",
+                            status_code=ack.get("code"),
+                        )
 
-                    if msg_type == "quote" and on_quote:
-                        await on_quote(data)
-                    elif msg_type == "error":
-                        if on_error:
-                            await on_error(data)
-                        else:
-                            logger.warning(
-                                "WebSocket error (unhandled): %s",
-                                data.get("message", data),
-                            )
-            finally:
-                ping_task.cancel()
+                async def _ping_loop():
+                    while True:
+                        await asyncio.sleep(ping_interval)
+                        try:
+                            await ws.send(json.dumps({"action": "ping"}))
+                        except Exception:
+                            break
+
+                ping_task = asyncio.create_task(_ping_loop())
+
+                try:
+                    async for message in ws:
+                        data = json.loads(message)
+                        msg_type = data.get("type")
+
+                        if msg_type == "quote" and on_quote:
+                            await on_quote(data)
+                        elif msg_type == "error":
+                            if on_error:
+                                await on_error(data)
+                            else:
+                                logger.warning(
+                                    "WebSocket error (unhandled): %s",
+                                    data.get("message", data),
+                                )
+
+                    raise ConnectionError("WebSocket connection closed by server")
+                finally:
+                    ping_task.cancel()
+        except websockets.exceptions.ConnectionClosed as exc:
+            close_frame = getattr(exc, "rcvd", None) or getattr(exc, "sent", None)
+            close_code = getattr(close_frame, "code", None)
+            close_reason = getattr(close_frame, "reason", None)
+            if close_code is None:
+                close_code = getattr(exc, "code", None)
+            if close_reason is None:
+                close_reason = getattr(exc, "reason", None)
+
+            known_close_error = self._error_for_ws_close_code(close_code, close_reason)
+            if known_close_error:
+                raise known_close_error
+            raise ConnectionError(
+                "WebSocket closed "
+                f"(code={close_code}, reason={close_reason or 'N/A'})"
+            )
+
+    @staticmethod
+    def _jittered_reconnect_delay(delay, max_reconnect_delay):
+        """Return exponential backoff delay with jitter for reconnect attempts."""
+        delay = max(0.0, float(delay))
+        jittered = random.uniform(delay * 0.8, delay * 1.2)
+        capped = min(jittered, float(max_reconnect_delay))
+        return max(0.0, capped)
+
+    @staticmethod
+    def _coerce_positive_int(value):
+        """Best-effort conversion of numeric limits to positive integers."""
+        try:
+            normalized = int(value)
+        except (TypeError, ValueError):
+            return None
+        if normalized <= 0:
+            return None
+        return normalized
+
+    @classmethod
+    def _extract_connected_limits(cls, message):
+        """Extract and normalize `connected.limits` payload from backend."""
+        if not isinstance(message, dict):
+            return {}
+        if message.get("type") != "connected":
+            return {}
+        limits = message.get("limits")
+        if not isinstance(limits, dict):
+            return {}
+        normalized = dict(limits)
+        normalized["max_symbols_per_connection"] = cls._coerce_positive_int(
+            limits.get("max_symbols_per_connection")
+        )
+        normalized["max_symbols_per_call"] = cls._coerce_positive_int(
+            limits.get("max_symbols_per_call")
+        )
+        return normalized
+
+    @staticmethod
+    def _error_for_ws_close_code(code, reason):
+        """Map backend close codes to stable, non-retryable SDK errors."""
+        if code == _WS_AUTH_CLOSE_CODE:
+            return SahmkError(
+                "WebSocket authentication failed (close code 4401).",
+                status_code=code,
+                error_code="WS_AUTH_FAILED",
+            )
+        if code == _WS_ENTITLEMENT_CLOSE_CODE:
+            return SahmkError(
+                "WebSocket access denied (close code 4403). "
+                "Check plan, entitlement, and account verification status.",
+                status_code=code,
+                error_code="WS_ACCESS_DENIED",
+            )
+        return None
