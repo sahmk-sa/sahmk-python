@@ -1,71 +1,32 @@
-# SAHMK Python SDK Roadmap
+# SAHMK | سهمك
 
-This roadmap outlines the planned direction for the `sahmk` Python SDK.
-Timelines are approximate and can change based on user feedback and API evolution.
+AI-powered Saudi market intelligence infrastructure.
 
-## Principles
+SAHMK provides licensed Saudi stock market data, real-time APIs, financial intelligence, and developer tools for applications, platforms, and enterprise workflows.
 
-- Keep onboarding fast: install and first successful call in under a minute.
-- Keep SDK surface clear: one obvious method per endpoint/use case.
-- Improve reliability in steps without overcomplicating the initial developer experience.
+## Platform
 
-## Current Status
+* Real-time Saudi market APIs
+* WebSocket streaming feeds
+* Historical market data
+* Financial statements & fundamentals
+* AI-powered market intelligence
+* WhatsApp market alerts
 
-### v0.1.0 (released)
+## Developer Resources
 
-- Core REST endpoints for quotes, market, company, historical, financials, dividends, and events
-- WebSocket streaming support
-- PyPI publishing setup
+* Developer portal: https://sahmk.sa/developers
+* API documentation: https://sahmk.sa/developers/docs
+* Developer dashboard: https://sahmk.sa/developers/dashboard
+* Python SDK: https://github.com/sahmk-sa/sahmk-python
+* PyPI package: https://pypi.org/project/sahmk/
+* MCP server: https://pypi.org/project/sahmk-mcp/
 
-### v0.2.0 (released)
+## Products
 
-- CLI command: `sahmk`
-- CLI commands for `quote`, `quotes`, `market`, and `historical`
-- API key support via `--api-key` or `SAHMK_API_KEY`
+* Web platform: https://sahmk.sa
+* Enterprise solutions: https://sahmk.sa/enterprise
 
-### v0.3.0 (released)
+---
 
-- WebSocket auto-reconnect with exponential backoff
-- Automatic resubscribe after reconnect
-- `on_disconnect` and `on_reconnect` callbacks for connection lifecycle visibility
-- Configurable reconnect behavior (`max_reconnect_attempts`, delays)
-- Error surfacing — no more silent failures in streaming
-- `SahmkError` exported from package root
-
-### v0.4.0 (released)
-
-- Automatic retries with exponential backoff for 429 and 5xx
-- `Retry-After` header support for rate-limited responses
-- `SahmkRateLimitError` with rate-limit metadata
-- Configurable retry behavior (`retries`, `backoff_factor`, `retry_on_timeout`)
-- Timeout retries (opt-in, enabled by default)
-
-### v0.5.0 (released)
-
-- Typed dataclass models for all endpoints (Quote, Company, Historical, etc.)
-- Full backwards compatibility — dict-style `[]` access preserved
-- Nested typed sub-objects (Liquidity, Fundamentals, Technicals, etc.)
-- `.raw` attribute on all models for original API response access
-
-### v0.6.0 (released)
-
-- CLI commands for `company`, `financials`, `dividends`, `events`, and `stream`
-- Full endpoint coverage in CLI
-- Stream command outputs JSON lines with auto-reconnect
-
-## Next Milestones
-
-## Documentation and Examples Plan
-
-- Keep README focused on 10-second success
-- Add practical examples (batch quotes, historical scans, simple watchlist scripts)
-- Add a troubleshooting section for common errors (invalid key, plan limits, rate limits)
-
-## Public vs Private Roadmap
-
-Recommended approach:
-
-- Keep this high-level roadmap **public** to build trust and set expectations.
-- Keep internal details **private** (exact launch dates, infrastructure, commercial terms, security specifics, unreleased enterprise commitments).
-
-This file is intended to stay public and product-focused.
+Licensed by Tadawul Saudi Exchange.
