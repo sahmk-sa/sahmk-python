@@ -496,6 +496,104 @@ class TestHistoricalEndpoint:
         assert "to=2024-01-10" in request.url
         assert "interval=1w" in request.url
 
+    @responses.activate
+    def test_historical_intraday_interval_30m_query(self, mock_client, sample_historical_response):
+        """Test historical request serializes 30m interval."""
+        responses.add(
+            responses.GET,
+            f"{mock_client.base_url}/historical/2222/",
+            json={**sample_historical_response, "interval": "30m"},
+            status=200,
+        )
+
+        mock_client.historical(
+            "2222",
+            from_date="2024-01-01",
+            to_date="2024-01-03",
+            interval="30m",
+        )
+
+        request = responses.calls[0].request
+        assert "interval=30m" in request.url
+
+    @responses.activate
+    def test_historical_intraday_interval_60m_query(self, mock_client, sample_historical_response):
+        """Test historical request serializes 60m interval."""
+        responses.add(
+            responses.GET,
+            f"{mock_client.base_url}/historical/2222/",
+            json={**sample_historical_response, "interval": "60m"},
+            status=200,
+        )
+
+        mock_client.historical(
+            "2222",
+            from_date="2024-01-01",
+            to_date="2024-01-03",
+            interval="60m",
+        )
+
+        request = responses.calls[0].request
+        assert "interval=60m" in request.url
+
+    @responses.activate
+    def test_historical_parses_optional_metadata_and_intraday_fields(self, mock_client):
+        """Test optional metadata and intraday candle fields parse safely."""
+        responses.add(
+            responses.GET,
+            f"{mock_client.base_url}/historical/2222/",
+            json={
+                "symbol": "2222",
+                "interval": "60m",
+                "from": "2026-01-01",
+                "to": "2026-01-03",
+                "count": 2,
+                "metadata": {
+                    "interval": "60m",
+                    "source": "real-time",
+                    "is_intraday": True,
+                    "is_final": False,
+                    "partial": True,
+                    "latest_bar_at": "2026-01-03T14:00:00+03:00",
+                },
+                "data": [
+                    {
+                        "date": "2026-01-03T13:00:00+03:00",
+                        "open": 32.0,
+                        "high": 32.1,
+                        "low": 31.9,
+                        "close": 32.05,
+                        "volume": 12000,
+                        "number_of_trades": 245,
+                        "is_final": True,
+                        "partial": False,
+                    },
+                    {
+                        "date": "2026-01-03T14:00:00+03:00",
+                        "open": 32.05,
+                        "high": 32.2,
+                        "low": 32.0,
+                        "close": 32.15,
+                        "volume": 9000,
+                        "number_of_trades": 180,
+                        "is_final": False,
+                        "partial": True,
+                    },
+                ],
+            },
+            status=200,
+        )
+
+        result = mock_client.historical("2222", interval="60m")
+
+        assert result.interval == "60m"
+        assert result.metadata is not None
+        assert result.metadata.is_intraday is True
+        assert result.metadata.latest_bar_at == "2026-01-03T14:00:00+03:00"
+        assert result.data[0].number_of_trades == 245
+        assert result.data[0].is_final is True
+        assert result.data[1].partial is True
+
 
 class TestMarketEndpoints:
     """Tests for market data endpoints."""

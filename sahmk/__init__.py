@@ -12,6 +12,7 @@ from .models import (
     BatchQuote,
     BatchQuotesResponse,
     IdentifierResolution,
+    HistoricalMetadata,
     HistoricalResponse,
     OHLCV,
     MarketSummary,
@@ -39,7 +40,7 @@ from .models import (
     Liquidity,
 )
 
-__version__ = "0.9.3"
+__version__ = "0.11.0"
 __all__ = [
     "SahmkClient",
     "SahmkError",
@@ -52,6 +53,7 @@ __all__ = [
     "BatchQuote",
     "BatchQuotesResponse",
     "IdentifierResolution",
+    "HistoricalMetadata",
     "HistoricalResponse",
     "OHLCV",
     "MarketSummary",

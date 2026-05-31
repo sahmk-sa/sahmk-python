@@ -94,6 +94,16 @@ class TestArgumentParser:
         assert args.to_date == "2024-01-10"
         assert args.interval == "1d"
 
+    def test_parser_historical_intraday_intervals(self):
+        """Test historical parser accepts 30m and 60m intervals."""
+        parser = _build_parser()
+
+        args_30m = parser.parse_args(["historical", "2222", "--interval", "30m"])
+        args_60m = parser.parse_args(["historical", "2222", "--interval", "60m"])
+
+        assert args_30m.interval == "30m"
+        assert args_60m.interval == "60m"
+
 
 class TestResolveApiKey:
     """Tests for API key resolution."""
@@ -417,6 +427,28 @@ class TestMainHistoricalCommand:
         ])
         
         assert exit_code == 0
+
+    @responses.activate
+    def test_historical_intraday_interval_passthrough(self, capsys, sample_historical_response, monkeypatch):
+        """Test historical command passes intraday interval query through."""
+        monkeypatch.setenv("SAHMK_API_KEY", "test_key")
+        responses.add(
+            responses.GET,
+            "https://app.sahmk.sa/api/v1/historical/2222/",
+            json={**sample_historical_response, "interval": "60m"},
+            status=200,
+        )
+
+        exit_code = main([
+            "historical", "2222",
+            "--from", "2024-01-01",
+            "--to", "2024-01-03",
+            "--interval", "60m"
+        ])
+
+        assert exit_code == 0
+        request = responses.calls[0].request
+        assert "interval=60m" in request.url
 
 
 class TestMainErrorHandling:

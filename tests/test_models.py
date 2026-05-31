@@ -9,6 +9,7 @@ from sahmk.models import (
     BatchQuote,
     BatchQuotesResponse,
     HistoricalResponse,
+    HistoricalMetadata,
     OHLCV,
     MarketSummary,
     MarketMover,
@@ -179,6 +180,62 @@ class TestHistoricalModel:
         resp = HistoricalResponse.from_dict(data)
         assert resp["symbol"] == "2222"
         assert resp["from"] == "2026-01-01"
+
+    def test_from_dict_with_metadata_and_intraday_fields(self):
+        data = {
+            "symbol": "2222",
+            "interval": "30m",
+            "from": "2026-01-01",
+            "to": "2026-01-03",
+            "count": 2,
+            "metadata": {
+                "interval": "30m",
+                "source": "real-time",
+                "is_intraday": True,
+                "is_final": False,
+                "partial": True,
+                "latest_bar_at": "2026-01-03T12:30:00+03:00",
+            },
+            "data": [
+                {
+                    "date": "2026-01-03T12:00:00+03:00",
+                    "open": 31.8,
+                    "high": 32.0,
+                    "low": 31.7,
+                    "close": 31.95,
+                    "volume": 8300,
+                    "number_of_trades": 140,
+                    "is_final": True,
+                    "partial": False,
+                }
+            ],
+        }
+        resp = HistoricalResponse.from_dict(data)
+        assert resp.interval == "30m"
+        assert isinstance(resp.metadata, HistoricalMetadata)
+        assert resp.metadata is not None
+        assert resp.metadata.source == "real-time"
+        assert resp.metadata.is_intraday is True
+        assert resp.data[0].number_of_trades == 140
+        assert resp.data[0].is_final is True
+        assert resp.data[0].partial is False
+
+    def test_from_dict_without_metadata_stays_compatible(self):
+        data = {
+            "symbol": "2222",
+            "interval": "1d",
+            "from": "2026-01-01",
+            "to": "2026-01-28",
+            "count": 1,
+            "data": [
+                {"date": "2026-01-28", "open": 25.3, "high": 25.68, "low": 25.3, "close": 25.64, "volume": 15738067}
+            ],
+        }
+        resp = HistoricalResponse.from_dict(data)
+        assert resp.metadata is None
+        assert resp.data[0].number_of_trades is None
+        assert resp.data[0].is_final is None
+        assert resp.data[0].partial is None
 
 
 class TestMarketModels:

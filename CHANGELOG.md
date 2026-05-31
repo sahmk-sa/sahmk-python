@@ -4,6 +4,14 @@ All notable changes to the `sahmk` Python SDK will be documented in this file.
 
 This project follows [Semantic Versioning](https://semver.org/).
 
+## [0.11.0] — 2026-05-31
+
+### Changed
+
+- Historical SDK + CLI contract aligned with customer-facing API updates: `historical()` and `sahmk historical` now support `30m` and `60m` intervals in addition to `1d`, `1w`, and `1m`, while keeping endpoint and parameter behavior unchanged.
+- Typed historical models now support optional response `metadata` (`interval`, `source`, `is_intraday`, `is_final`, `partial`, `latest_bar_at`) and optional intraday candle fields (`number_of_trades`, `is_final`, `partial`) without breaking existing daily/weekly/monthly payload parsing.
+- Historical docs/examples now document plan-based interval/range availability and clarify that out-of-plan requests are surfaced by the API as `403 PLAN_LIMIT` (no SDK-side hard blocking).
+
 ## [0.10.0] — 2026-05-29
 
 ### Added

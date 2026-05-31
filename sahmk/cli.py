@@ -81,8 +81,8 @@ def _build_parser():
     historical_parser.add_argument("--to", dest="to_date", help="End date YYYY-MM-DD.")
     historical_parser.add_argument(
         "--interval",
-        choices=["1d", "1w", "1m"],
-        help='Interval: "1d", "1w", or "1m".',
+        choices=["1d", "1w", "1m", "30m", "60m"],
+        help='Interval: "1d", "1w", "1m", "30m", or "60m".',
     )
     _compact_arg(historical_parser)
 

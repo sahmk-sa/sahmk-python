@@ -482,7 +482,7 @@ class SahmkClient:
             symbol: Stock symbol
             from_date: Start date YYYY-MM-DD (default: 30 days ago)
             to_date: End date YYYY-MM-DD (default: today)
-            interval: "1d", "1w", or "1m" (default: "1d")
+            interval: "1d", "1w", "1m", "30m", or "60m" (default: "1d")
 
         Returns:
             HistoricalResponse with .data list of OHLCV objects

@@ -300,6 +300,31 @@ class BatchQuotesResponse(_DictAccessMixin):
 # ---------------------------------------------------------------------------
 
 @dataclass
+class HistoricalMetadata(_DictAccessMixin):
+    """Optional metadata block returned by historical endpoint."""
+
+    interval: Optional[str] = None
+    source: Optional[str] = None
+    is_intraday: Optional[bool] = None
+    is_final: Optional[bool] = None
+    partial: Optional[bool] = None
+    latest_bar_at: Optional[str] = None
+    raw: Dict[str, Any] = field(default_factory=dict, repr=False)
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "HistoricalMetadata":
+        return cls(
+            interval=data.get("interval"),
+            source=data.get("source"),
+            is_intraday=data.get("is_intraday"),
+            is_final=data.get("is_final"),
+            partial=data.get("partial"),
+            latest_bar_at=data.get("latest_bar_at"),
+            raw=data,
+        )
+
+
+@dataclass
 class OHLCV(_DictAccessMixin):
     """A single OHLCV data point."""
 
@@ -311,6 +336,9 @@ class OHLCV(_DictAccessMixin):
     volume: Optional[int] = None
     adjusted_close: Optional[float] = None
     turnover: Optional[float] = None
+    number_of_trades: Optional[int] = None
+    is_final: Optional[bool] = None
+    partial: Optional[bool] = None
     raw: Dict[str, Any] = field(default_factory=dict, repr=False)
 
     @classmethod
@@ -324,6 +352,9 @@ class OHLCV(_DictAccessMixin):
             volume=data.get("volume"),
             adjusted_close=data.get("adjusted_close"),
             turnover=data.get("turnover"),
+            number_of_trades=data.get("number_of_trades"),
+            is_final=data.get("is_final"),
+            partial=data.get("partial"),
             raw=data,
         )
 
@@ -337,18 +368,25 @@ class HistoricalResponse(_DictAccessMixin):
     from_date: Optional[str] = None
     to_date: Optional[str] = None
     count: Optional[int] = None
+    metadata: Optional[HistoricalMetadata] = None
     data: List[OHLCV] = field(default_factory=list)
     raw: Dict[str, Any] = field(default_factory=dict, repr=False)
 
     @classmethod
     def from_dict(cls, d: Dict[str, Any]) -> "HistoricalResponse":
         points = [OHLCV.from_dict(p) for p in d.get("data", [])]
+        metadata_data = d.get("metadata")
         return cls(
             symbol=d.get("symbol"),
             interval=d.get("interval"),
             from_date=d.get("from"),
             to_date=d.get("to"),
             count=d.get("count"),
+            metadata=(
+                HistoricalMetadata.from_dict(metadata_data)
+                if isinstance(metadata_data, dict)
+                else None
+            ),
             data=points,
             raw=d,
         )

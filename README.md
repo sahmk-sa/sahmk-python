@@ -12,7 +12,7 @@ Use one client for live Tadawul quotes, market-level insights, company/fundament
 
 - **Real-time quotes** for 350+ Tadawul stocks
 - **Batch quotes** for up to 50 symbols per request
-- **Historical OHLCV** data with date-range support
+- **Historical OHLCV** data with date-range support (`1d`, `1w`, `1m`, `30m`, `60m`)
 - **Market overview** with index scoping (`TASI`/`NOMU`)
 - **Company directory** endpoint for symbol discovery
 - **Company/fundamental** data (plan-dependent fields)
@@ -149,6 +149,17 @@ client = SahmkClient("your_api_key", retries=3, backoff_factor=0.5)
 Some methods are plan-gated (for example `quotes`, `historical`, `financials`, `dividends`, `events`).
 When your plan does not include an endpoint, the API returns an error response (not retried automatically).
 
+Historical data availability is plan-based:
+
+- Free: no historical access
+- Starter: `1d`, `1w`, `1m`
+- Pro: Starter intervals + `60m` up to 90 days
+- Business: Starter intervals + `30m` up to 6 months + `60m` up to 1 year
+- Enterprise: Business defaults plus custom retention/interval/delivery by agreement
+
+Out-of-plan interval/range requests are returned by the API as `403 PLAN_LIMIT`.
+The SDK does not hard-block these requests client-side; it passes the API response through.
+
 ## CLI Quick Start
 
 ```bash
@@ -157,6 +168,7 @@ sahmk quote 2222
 sahmk market summary --index NOMU
 sahmk market gainers --limit 5 --index NOMUC
 sahmk historical 2222 --from 2026-01-01 --to 2026-01-28
+sahmk historical 2222 --from 2026-01-01 --to 2026-01-03 --interval 60m
 sahmk company 2222
 sahmk financials 2222
 sahmk dividends 2222
@@ -228,7 +240,7 @@ Base URL: `https://app.sahmk.sa/api/v1`
 |----------|------|-------------|
 | `GET /quote/{symbol}/` | Free | Stock quote |
 | `GET /quotes/?symbols=...` | Starter+ | Batch quotes (up to 50) |
-| `GET /historical/{symbol}/` | Starter+ | Historical OHLCV data |
+| `GET /historical/{symbol}/` | Starter+ | Historical OHLCV data (`1d`, `1w`, `1m`, `30m`, `60m`, plan-limited) |
 | `GET /market/summary/` | Free | Market overview |
 | `GET /market/gainers/` | Free | Top gainers |
 | `GET /market/losers/` | Free | Top losers |
