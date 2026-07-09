@@ -4,6 +4,15 @@ All notable changes to the `sahmk` Python SDK will be documented in this file.
 
 This project follows [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Changed
+
+- Response model parsers now accept both legacy and current payload shapes for key endpoints:
+  - batch quotes now maps `resolution.not_found` and `resolution.ambiguous` when top-level `unknown`/`ambiguous` are absent
+  - historical now maps top-level intraday metadata fields into typed `metadata` when nested `metadata` is omitted
+  - analytics models now accept both legacy (`rows`) and current (`ratios`/`results`) list keys.
+
 ## [0.12.0] — 2026-07-10
 
 ### Changed

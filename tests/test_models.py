@@ -137,6 +137,23 @@ class TestBatchQuotesModel:
         assert resp["count"] == 1
         assert resp["quotes"][0]["symbol"] == "2222"
 
+    def test_from_dict_resolution_block_maps_ambiguous_and_unknown(self):
+        data = {
+            "quotes": [{"symbol": "2222", "requested_identifier": "أرامكو"}],
+            "count": 1,
+            "resolution": {
+                "requested_count": 3,
+                "resolved_count": 1,
+                "ambiguous": [{"input": "البنك", "candidates": [{"symbol": "1120"}]}],
+                "not_found": [{"input": "NOT_A_STOCK"}],
+            },
+        }
+        resp = BatchQuotesResponse.from_dict(data)
+        assert len(resp.ambiguous) == 1
+        assert resp.ambiguous[0]["input"] == "البنك"
+        assert len(resp.unknown) == 1
+        assert resp.unknown[0]["input"] == "NOT_A_STOCK"
+
     @responses.activate
     def test_client_returns_batch(self, client):
         data = {"quotes": [{"symbol": "2222", "price": 25.86}], "count": 1}
@@ -236,6 +253,26 @@ class TestHistoricalModel:
         assert resp.data[0].number_of_trades is None
         assert resp.data[0].is_final is None
         assert resp.data[0].partial is None
+
+    def test_from_dict_top_level_intraday_metadata_is_mapped(self):
+        data = {
+            "symbol": "2222",
+            "interval": "60m",
+            "source": "developer_intraday_bar",
+            "is_intraday": True,
+            "is_final": False,
+            "partial": True,
+            "latest_bar_at": "2026-01-03T14:00:00+03:00",
+            "from": "2026-01-01",
+            "to": "2026-01-03",
+            "count": 0,
+            "data": [],
+        }
+        resp = HistoricalResponse.from_dict(data)
+        assert resp.metadata is not None
+        assert resp.metadata.source == "developer_intraday_bar"
+        assert resp.metadata.is_intraday is True
+        assert resp.metadata.partial is True
 
 
 class TestMarketModels:
@@ -530,6 +567,26 @@ class TestAnalyticsModels:
         assert isinstance(resp.rows[0], CompareRow)
         assert resp.rows[0].coverage["quality"] == "full"
         assert resp.rows[0].ratios["pe"] == 18.2
+
+    def test_ratios_from_dict_accepts_ratios_key(self):
+        payload = {
+            "symbol": "1120",
+            "ratios": self.RATIOS_DATA["rows"],
+            "meta": self.RATIOS_DATA["meta"],
+        }
+        resp = RatiosResponse.from_dict(payload)
+        assert len(resp.rows) == 1
+        assert resp.rows[0].statement_period == "annual"
+
+    def test_compare_from_dict_accepts_results_key(self):
+        payload = {
+            "results": self.COMPARE_DATA["rows"],
+            "count": len(self.COMPARE_DATA["rows"]),
+            "meta": self.COMPARE_DATA["meta"],
+        }
+        resp = CompareResponse.from_dict(payload)
+        assert len(resp.rows) == 1
+        assert resp.rows[0].company_name == "Al Rajhi Bank"
 
     @responses.activate
     def test_client_returns_ratios(self, client):

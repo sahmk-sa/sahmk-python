@@ -280,17 +280,30 @@ class BatchQuotesResponse(_DictAccessMixin):
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "BatchQuotesResponse":
         quotes = [BatchQuote.from_dict(q) for q in data.get("quotes", [])]
+        resolution_data = data.get("resolution")
+        if not isinstance(resolution_data, dict):
+            resolution_data = {}
         resolved = [
             IdentifierResolution.from_dict(r)
             for r in data.get("resolved", [])
             if isinstance(r, dict)
         ]
+        ambiguous = data.get("ambiguous")
+        if not isinstance(ambiguous, list):
+            ambiguous = resolution_data.get("ambiguous", [])
+        unknown = data.get("unknown")
+        if not isinstance(unknown, list):
+            not_found = resolution_data.get("not_found", [])
+            unknown = not_found if isinstance(not_found, list) else []
+        count = data.get("count")
+        if not isinstance(count, int):
+            count = len(quotes)
         return cls(
             quotes=quotes,
-            count=data.get("count"),
+            count=count,
             resolved=resolved,
-            ambiguous=data.get("ambiguous", []),
-            unknown=data.get("unknown", []),
+            ambiguous=ambiguous,
+            unknown=unknown,
             raw=data,
         )
 
@@ -376,6 +389,27 @@ class HistoricalResponse(_DictAccessMixin):
     def from_dict(cls, d: Dict[str, Any]) -> "HistoricalResponse":
         points = [OHLCV.from_dict(p) for p in d.get("data", [])]
         metadata_data = d.get("metadata")
+        if not isinstance(metadata_data, dict):
+            has_top_level_meta = any(
+                d.get(key) is not None
+                for key in (
+                    "source",
+                    "is_intraday",
+                    "is_final",
+                    "partial",
+                    "latest_bar_at",
+                )
+            )
+            if has_top_level_meta:
+                top_level_meta = {
+                    "interval": d.get("interval"),
+                    "source": d.get("source"),
+                    "is_intraday": d.get("is_intraday"),
+                    "is_final": d.get("is_final"),
+                    "partial": d.get("partial"),
+                    "latest_bar_at": d.get("latest_bar_at"),
+                }
+                metadata_data = top_level_meta
         return cls(
             symbol=d.get("symbol"),
             interval=d.get("interval"),
@@ -847,7 +881,11 @@ class RatiosResponse(_DictAccessMixin):
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "RatiosResponse":
-        rows_data = data.get("rows", [])
+        rows_data = data.get("rows")
+        if rows_data is None:
+            rows_data = data.get("ratios", [])
+        if not isinstance(rows_data, list):
+            rows_data = data.get("ratios", [])
         if not isinstance(rows_data, list):
             rows_data = []
         return cls(
@@ -901,7 +939,11 @@ class CompareResponse(_DictAccessMixin):
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "CompareResponse":
-        rows_data = data.get("rows", [])
+        rows_data = data.get("rows")
+        if rows_data is None:
+            rows_data = data.get("results", [])
+        if not isinstance(rows_data, list):
+            rows_data = data.get("results", [])
         if not isinstance(rows_data, list):
             rows_data = []
         return cls(

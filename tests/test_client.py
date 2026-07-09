@@ -379,6 +379,33 @@ class TestQuotesEndpoint:
         assert result.unknown[0]["identifier"] == "NOT_A_STOCK"
 
     @responses.activate
+    def test_quotes_maps_resolution_not_found_to_unknown(self, mock_client):
+        """Test current backend resolution.not_found maps into unknown list."""
+        responses.add(
+            responses.GET,
+            f"{mock_client.base_url}/quotes/",
+            json={
+                "quotes": [{"symbol": "2222", "requested_identifier": "أرامكو"}],
+                "count": 1,
+                "resolution": {
+                    "requested_count": 3,
+                    "resolved_count": 1,
+                    "ambiguous": [{"input": "البنك", "candidates": [{"symbol": "1120"}]}],
+                    "not_found": [{"input": "NOT_A_STOCK"}],
+                },
+            },
+            status=200,
+        )
+
+        result = mock_client.quotes(["أرامكو", "البنك", "NOT_A_STOCK"])
+
+        assert result.count == 1
+        assert len(result.ambiguous) == 1
+        assert result.ambiguous[0]["input"] == "البنك"
+        assert len(result.unknown) == 1
+        assert result.unknown[0]["input"] == "NOT_A_STOCK"
+
+    @responses.activate
     def test_quotes_falls_back_to_legacy_symbols_param(self, mock_client):
         """Test legacy backend fallback from identifiers to symbols query key."""
         responses.add(
