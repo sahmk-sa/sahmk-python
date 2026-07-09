@@ -687,7 +687,6 @@ class SahmkClient:
         history=None,
         metrics=None,
         result=None,
-        include_quality=None,
         include_partial=None,
     ):
         """
@@ -702,7 +701,6 @@ class SahmkClient:
             history: Optional history selector (e.g. latest, 3y, 5y)
             metrics: Optional metrics set selector
             result: Optional result shape selector
-            include_quality: Optional quality metadata toggle
             include_partial: Optional partial-period records toggle
 
         Returns:
@@ -715,7 +713,6 @@ class SahmkClient:
             "history": history,
             "metrics": metrics,
             "result": result,
-            "include_quality": include_quality,
             "include_partial": include_partial,
         }
         if period is None:

@@ -4,6 +4,12 @@ All notable changes to the `sahmk` Python SDK will be documented in this file.
 
 This project follows [Semantic Versioning](https://semver.org/).
 
+## [0.12.0] — 2026-07-10
+
+### Changed
+
+- `financials()` no longer exposes `include_quality` as a public query kwarg. Public financials contract now supports: `type`, `period`, `statement_period`, `history`, `metrics`, `result`, and `include_partial`.
+
 ## [0.11.0] — 2026-05-31
 
 ### Changed

@@ -920,7 +920,6 @@ class TestCompanyEndpoints:
             history="3y",
             metrics="core",
             result="latest",
-            include_quality=True,
             include_partial=False,
         )
 
@@ -931,7 +930,6 @@ class TestCompanyEndpoints:
         assert "history=3y" in request_url
         assert "metrics=core" in request_url
         assert "result=latest" in request_url
-        assert "include_quality=True" in request_url
         assert "include_partial=False" in request_url
 
     @responses.activate
