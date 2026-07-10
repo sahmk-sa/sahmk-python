@@ -598,6 +598,95 @@ class TestMainFinancialsCommand:
         assert "income_statements" in captured.out
 
 
+class TestMainRatiosCommand:
+    """Tests for main function with ratios command."""
+
+    @responses.activate
+    def test_ratios_success(self, capsys, monkeypatch):
+        """Test successful ratios command."""
+        monkeypatch.setenv("SAHMK_API_KEY", "test_key")
+        responses.add(
+            responses.GET,
+            "https://app.sahmk.sa/api/v1/analytics/ratios/2222/",
+            json={
+                "symbol": "2222",
+                "ratios": [],
+                "meta": {"period": "annual", "metrics": "core", "warnings": []},
+            },
+            status=200,
+        )
+
+        exit_code = main(["ratios", "2222"])
+
+        assert exit_code == 0
+        captured = capsys.readouterr()
+        assert '"symbol": "2222"' in captured.out
+
+    @responses.activate
+    def test_ratios_full_args(self, capsys, monkeypatch):
+        """Test ratios command passes query params."""
+        monkeypatch.setenv("SAHMK_API_KEY", "test_key")
+        responses.add(
+            responses.GET,
+            "https://app.sahmk.sa/api/v1/analytics/ratios/2222/",
+            json={"symbol": "2222", "ratios": [], "meta": {}},
+            status=200,
+        )
+
+        exit_code = main(
+            ["ratios", "2222", "--history", "5y", "--period", "quarterly", "--metrics", "extended"]
+        )
+
+        assert exit_code == 0
+        request = responses.calls[0].request
+        assert "history=5y" in request.url
+        assert "period=quarterly" in request.url
+        assert "metrics=extended" in request.url
+
+
+class TestMainCompareCommand:
+    """Tests for main function with compare command."""
+
+    @responses.activate
+    def test_compare_success(self, capsys, monkeypatch):
+        """Test successful compare command."""
+        monkeypatch.setenv("SAHMK_API_KEY", "test_key")
+        responses.add(
+            responses.GET,
+            "https://app.sahmk.sa/api/v1/analytics/compare/",
+            json={
+                "results": [{"symbol": "2222"}, {"symbol": "1120"}],
+                "count": 2,
+                "meta": {"period": "annual", "metrics": "core", "warnings": []},
+            },
+            status=200,
+        )
+
+        exit_code = main(["compare", "2222,1120"])
+
+        assert exit_code == 0
+        captured = capsys.readouterr()
+        assert '"count": 2' in captured.out
+
+    @responses.activate
+    def test_compare_passes_metrics(self, capsys, monkeypatch):
+        """Test compare command passes metrics query."""
+        monkeypatch.setenv("SAHMK_API_KEY", "test_key")
+        responses.add(
+            responses.GET,
+            "https://app.sahmk.sa/api/v1/analytics/compare/",
+            json={"results": [], "count": 0, "meta": {}},
+            status=200,
+        )
+
+        exit_code = main(["compare", "2222,1120", "--metrics", "extended"])
+
+        assert exit_code == 0
+        request = responses.calls[0].request
+        assert "symbols=2222%2C1120" in request.url or "symbols=2222,1120" in request.url
+        assert "metrics=extended" in request.url
+
+
 class TestMainDividendsCommand:
     """Tests for main function with dividends command."""
 
@@ -714,3 +803,21 @@ class TestParserNewCommands:
         args = parser.parse_args(["stream", "2222,1120"])
         assert args.command == "stream"
         assert args.symbols == "2222,1120"
+
+    def test_parser_ratios_command(self):
+        parser = _build_parser()
+        args = parser.parse_args(
+            ["ratios", "2222", "--history", "5y", "--period", "quarterly", "--metrics", "extended"]
+        )
+        assert args.command == "ratios"
+        assert args.symbol == "2222"
+        assert args.history == "5y"
+        assert args.period == "quarterly"
+        assert args.metrics == "extended"
+
+    def test_parser_compare_command(self):
+        parser = _build_parser()
+        args = parser.parse_args(["compare", "2222,1120", "--metrics", "extended"])
+        assert args.command == "compare"
+        assert args.symbols == "2222,1120"
+        assert args.metrics == "extended"

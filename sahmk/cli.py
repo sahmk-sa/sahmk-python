@@ -98,6 +98,45 @@ def _build_parser():
     financials_parser.add_argument("symbol", help='Stock symbol (e.g., "2222").')
     _compact_arg(financials_parser)
 
+    ratios_parser = subparsers.add_parser(
+        "ratios", help="Get analytics ratios (Starter+ plan, Pro features vary)."
+    )
+    ratios_parser.add_argument("symbol", help='Stock symbol (e.g., "2222").')
+    ratios_parser.add_argument(
+        "--history",
+        choices=["latest", "3y", "5y", "10y", "max"],
+        default="latest",
+        help='History window: "latest", "3y", "5y", "10y", or "max".',
+    )
+    ratios_parser.add_argument(
+        "--period",
+        choices=["annual", "quarterly"],
+        default="annual",
+        help='Statement period: "annual" or "quarterly".',
+    )
+    ratios_parser.add_argument(
+        "--metrics",
+        choices=["core", "extended"],
+        default="core",
+        help='Metrics profile: "core" or "extended".',
+    )
+    _compact_arg(ratios_parser)
+
+    compare_parser = subparsers.add_parser(
+        "compare", help="Compare analytics across multiple symbols."
+    )
+    compare_parser.add_argument(
+        "symbols",
+        help='Comma-separated symbols, e.g. "2222,1120,2010".',
+    )
+    compare_parser.add_argument(
+        "--metrics",
+        choices=["core", "extended"],
+        default="core",
+        help='Metrics profile: "core" or "extended".',
+    )
+    _compact_arg(compare_parser)
+
     dividends_parser = subparsers.add_parser(
         "dividends", help="Get dividend history and yield (Starter+ plan)."
     )
@@ -238,6 +277,18 @@ def main(argv=None):
             result = client.company(args.symbol)
         elif args.command == "financials":
             result = client.financials(args.symbol)
+        elif args.command == "ratios":
+            result = client.ratios(
+                args.symbol,
+                history=args.history,
+                period=args.period,
+                metrics=args.metrics,
+            )
+        elif args.command == "compare":
+            symbols = [s.strip() for s in args.symbols.split(",") if s.strip()]
+            if not symbols:
+                parser.error("At least one symbol is required for compare.")
+            result = client.compare(symbols, metrics=args.metrics)
         elif args.command == "dividends":
             result = client.dividends(args.symbol)
         elif args.command == "events":
