@@ -4,7 +4,7 @@ All notable changes to the `sahmk` Python SDK will be documented in this file.
 
 This project follows [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.12.1] — 2026-07-10
 
 ### Changed
 

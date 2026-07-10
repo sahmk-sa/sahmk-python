@@ -171,6 +171,8 @@ sahmk historical 2222 --from 2026-01-01 --to 2026-01-28
 sahmk historical 2222 --from 2026-01-01 --to 2026-01-03 --interval 60m
 sahmk company 2222
 sahmk financials 2222
+sahmk ratios 2222 --history latest --period annual --metrics core
+sahmk compare 2222,1120 --metrics extended
 sahmk dividends 2222
 sahmk events --symbol 2222 --limit 5
 sahmk stream 2222,1120
