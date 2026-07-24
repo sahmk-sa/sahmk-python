@@ -119,6 +119,34 @@ def sample_market_summary_response():
 
 
 @pytest.fixture
+def sample_depth_response():
+    """Sample market depth API response (matches live API shape)."""
+    return {
+        "symbol": "2222",
+        "updated_at": "2026-07-23T12:19:57.945165+00:00",
+        "session": "regular",
+        "book_state": "normal",
+        "levels": 5,
+        "best_bid": 26.8,
+        "best_ask": 26.84,
+        "spread": 0.04,
+        "spread_bps": 14.93,
+        "total_bid_quantity_top5": 22355,
+        "total_ask_quantity_top5": 403264,
+        "level_imbalance": -0.895,
+        "bids": [
+            {"level": 0, "price": 26.8, "quantity": 16, "order_count": 2},
+            {"level": 1, "price": 26.78, "quantity": 20, "order_count": 1},
+        ],
+        "asks": [
+            {"level": 0, "price": 26.84, "quantity": 65031, "order_count": 50},
+            {"level": 1, "price": 26.86, "quantity": 7818, "order_count": 21},
+        ],
+        "entitled_levels": 5,
+    }
+
+
+@pytest.fixture
 def sample_gainers_response():
     """Sample gainers API response."""
     return {

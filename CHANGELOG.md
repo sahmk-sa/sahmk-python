@@ -4,6 +4,15 @@ All notable changes to the `sahmk` Python SDK will be documented in this file.
 
 This project follows [Semantic Versioning](https://semver.org/).
 
+## [0.13.0] — 2026-07-24
+
+### Added
+
+- Market depth REST support via `client.depth(symbol, levels=...)` and typed `MarketDepth` / `DepthLevel` models.
+- Dedicated depth WebSocket streaming via `client.stream_depth(...)` on `/ws/v1/market/depth/`.
+- CLI commands `sahmk depth` and `sahmk stream-depth`.
+- Examples: `examples/depth.py` and `examples/websocket_depth.py`.
+
 ## [0.12.1] — 2026-07-10
 
 ### Changed

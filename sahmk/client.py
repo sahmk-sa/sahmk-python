@@ -14,6 +14,7 @@ import requests
 
 BASE_URL = "https://app.sahmk.sa/api/v1"
 WS_URL = "wss://app.sahmk.sa/ws/v1/stocks/"
+DEPTH_WS_URL = "wss://app.sahmk.sa/ws/v1/market/depth/"
 
 logger = logging.getLogger("sahmk")
 
@@ -23,6 +24,8 @@ _VALID_MARKET_INDEXES = frozenset({"TASI", "NOMU"})
 _WS_AUTH_CLOSE_CODE = 4401
 _WS_ENTITLEMENT_CLOSE_CODE = 4403
 _DEFAULT_WS_MAX_SYMBOLS_PER_CALL = 20
+_DEPTH_LEVELS_MIN = 1
+_DEPTH_LEVELS_MAX = 20
 
 
 class SahmkError(Exception):
@@ -620,6 +623,30 @@ class SahmkClient:
         )
         return SectorsResponse.from_dict(data)
 
+    def depth(self, symbol, levels=None):
+        """
+        Get market depth (order book) for a symbol.
+
+        Args:
+            symbol: Stock symbol (e.g., "2222")
+            levels: Optional number of book levels to request (1-20).
+                    Backend default is 5; entitlement may cap below the request.
+
+        Returns:
+            MarketDepth object with bids/asks ladders and book metrics
+        """
+        from .models import MarketDepth
+        params = {}
+        normalized_levels = self._normalize_depth_levels(levels)
+        if normalized_levels is not None:
+            params["levels"] = normalized_levels
+        data = self._request(
+            "GET",
+            f"/market/depth/{symbol}/",
+            params=params or None,
+        )
+        return MarketDepth.from_dict(data)
+
     # -------------------------------------------------------------------------
     # Company Data
     # -------------------------------------------------------------------------
@@ -1022,6 +1049,267 @@ class SahmkClient:
                 "WebSocket closed "
                 f"(code={close_code}, reason={close_reason or 'N/A'})"
             )
+
+    async def stream_depth(
+        self,
+        symbols,
+        on_depth=None,
+        on_error=None,
+        on_disconnect=None,
+        on_reconnect=None,
+        levels=None,
+        ping_interval=30,
+        max_reconnect_attempts=0,
+        initial_reconnect_delay=1.0,
+        max_reconnect_delay=60.0,
+    ):
+        """
+        Stream real-time market depth via WebSocket.
+
+        Uses a dedicated depth channel (`/ws/v1/market/depth/`) with full
+        snapshot pushes on change. Supports automatic reconnection with
+        exponential backoff and resubscribe after reconnect.
+
+        Args:
+            symbols: List of stock symbols to subscribe to.
+            on_depth: Async callback — on_depth(data) for `depth_snapshot`
+                      messages (book fields match REST depth payloads).
+            on_error: Async callback — on_error(error_data)
+            on_disconnect: Async callback — on_disconnect(reason)
+            on_reconnect: Async callback — on_reconnect(attempt)
+            levels: Optional book levels to request (1-20). Entitlement may
+                    cap the served depth below this value.
+            ping_interval: Seconds between keep-alive pings (default: 30)
+            max_reconnect_attempts: Maximum reconnection attempts. 0 means
+                                    unlimited reconnection (default). Set to -1
+                                    to disable reconnection entirely.
+            initial_reconnect_delay: Initial delay before first reconnect.
+            max_reconnect_delay: Maximum delay between reconnect attempts.
+
+        Notes:
+            - Close code 4401 indicates authentication failure and is not retried.
+            - Close code 4403 indicates entitlement/plan/account access failure
+              and is not retried.
+            - Subscribe responses may emit one or more `depth_snapshot` messages
+              before the `subscribed` acknowledgement.
+        """
+        try:
+            import websockets  # noqa: F401
+        except ImportError:
+            raise SahmkError(
+                "websockets package required for streaming. "
+                "Install it with: pip install websockets"
+            )
+
+        import asyncio
+
+        if isinstance(symbols, str):
+            symbols = [symbols]
+        if not symbols:
+            raise ValueError("At least one symbol is required")
+
+        normalized_levels = self._normalize_depth_levels(levels)
+        reconnect_enabled = max_reconnect_attempts != -1
+        attempt = 0
+        delay = initial_reconnect_delay
+
+        while True:
+            try:
+                await self._stream_depth_connection(
+                    symbols=symbols,
+                    on_depth=on_depth,
+                    on_error=on_error,
+                    levels=normalized_levels,
+                    ping_interval=ping_interval,
+                )
+                return
+            except SahmkError:
+                raise
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:
+                reason = str(exc) or type(exc).__name__
+
+                if on_disconnect:
+                    try:
+                        await on_disconnect(reason)
+                    except Exception:
+                        pass
+
+                if not reconnect_enabled:
+                    raise SahmkError(
+                        f"WebSocket disconnected: {reason}"
+                    )
+
+                attempt += 1
+
+                if max_reconnect_attempts > 0 and attempt > max_reconnect_attempts:
+                    raise SahmkError(
+                        f"WebSocket reconnection failed after "
+                        f"{max_reconnect_attempts} attempts: {reason}"
+                    )
+
+                sleep_for = self._jittered_reconnect_delay(delay, max_reconnect_delay)
+                logger.info(
+                    "Depth WebSocket disconnected (%s), reconnecting in %.2fs "
+                    "(attempt %d, base %.2fs)...",
+                    reason,
+                    sleep_for,
+                    attempt,
+                    delay,
+                )
+                await asyncio.sleep(sleep_for)
+                delay = min(delay * 2, max_reconnect_delay)
+
+                if on_reconnect:
+                    try:
+                        await on_reconnect(attempt)
+                    except Exception:
+                        pass
+
+    async def _stream_depth_connection(
+        self,
+        symbols,
+        on_depth=None,
+        on_error=None,
+        levels=None,
+        ping_interval=30,
+    ):
+        """Single depth WebSocket connection lifecycle: connect, subscribe, listen."""
+        import asyncio
+        import websockets
+
+        url = f"{DEPTH_WS_URL}?api_key={self.api_key}"
+
+        try:
+            async with websockets.connect(url) as ws:
+                msg = json.loads(await ws.recv())
+                if msg.get("type") == "error":
+                    raise SahmkError(
+                        f"WebSocket error: {msg.get('message')}",
+                        status_code=msg.get("code"),
+                        error_code=msg.get("code")
+                        if isinstance(msg.get("code"), str)
+                        else None,
+                    )
+
+                limits = self._extract_connected_limits(msg)
+                max_symbols_per_connection = limits.get("max_symbols_per_connection")
+                if (
+                    max_symbols_per_connection is not None
+                    and len(symbols) > max_symbols_per_connection
+                ):
+                    raise SahmkError(
+                        "Too many symbols for this connection: "
+                        f"{len(symbols)} requested, "
+                        f"max {max_symbols_per_connection} allowed."
+                    )
+
+                max_symbols_per_call = (
+                    limits.get("max_symbols_per_call") or _DEFAULT_WS_MAX_SYMBOLS_PER_CALL
+                )
+
+                for i in range(0, len(symbols), max_symbols_per_call):
+                    batch = symbols[i : i + max_symbols_per_call]
+                    payload = {"action": "subscribe", "symbols": batch}
+                    if levels is not None:
+                        payload["levels"] = levels
+                    await ws.send(json.dumps(payload))
+                    await self._await_depth_subscribe_ack(
+                        ws,
+                        on_depth=on_depth,
+                        on_error=on_error,
+                    )
+
+                async def _ping_loop():
+                    while True:
+                        await asyncio.sleep(ping_interval)
+                        try:
+                            await ws.send(json.dumps({"action": "ping"}))
+                        except Exception:
+                            break
+
+                ping_task = asyncio.create_task(_ping_loop())
+
+                try:
+                    async for message in ws:
+                        data = json.loads(message)
+                        msg_type = data.get("type")
+
+                        if msg_type == "depth_snapshot" and on_depth:
+                            await on_depth(data)
+                        elif msg_type == "error":
+                            if on_error:
+                                await on_error(data)
+                            else:
+                                logger.warning(
+                                    "Depth WebSocket error (unhandled): %s",
+                                    data.get("message", data),
+                                )
+
+                    raise ConnectionError("WebSocket connection closed by server")
+                finally:
+                    ping_task.cancel()
+        except websockets.exceptions.ConnectionClosed as exc:
+            close_frame = getattr(exc, "rcvd", None) or getattr(exc, "sent", None)
+            close_code = getattr(close_frame, "code", None)
+            close_reason = getattr(close_frame, "reason", None)
+            if close_code is None:
+                close_code = getattr(exc, "code", None)
+            if close_reason is None:
+                close_reason = getattr(exc, "reason", None)
+
+            known_close_error = self._error_for_ws_close_code(close_code, close_reason)
+            if known_close_error:
+                raise known_close_error
+            raise ConnectionError(
+                "WebSocket closed "
+                f"(code={close_code}, reason={close_reason or 'N/A'})"
+            )
+
+    async def _await_depth_subscribe_ack(self, ws, on_depth=None, on_error=None):
+        """Drain post-subscribe messages until subscribed/error acknowledgement."""
+        while True:
+            data = json.loads(await ws.recv())
+            msg_type = data.get("type")
+
+            if msg_type == "depth_snapshot":
+                if on_depth:
+                    await on_depth(data)
+                continue
+            if msg_type == "subscribed":
+                return data
+            if msg_type == "error":
+                if on_error:
+                    await on_error(data)
+                raise SahmkError(
+                    f"Subscribe error: {data.get('message')}",
+                    status_code=data.get("code")
+                    if isinstance(data.get("code"), int)
+                    else None,
+                    error_code=data.get("code")
+                    if isinstance(data.get("code"), str)
+                    else None,
+                )
+            if msg_type in {"pong", "connected", "unsubscribed"}:
+                continue
+            # Unknown control traffic — keep waiting for subscribed/error.
+            logger.debug("Ignoring depth subscribe interim message: %s", msg_type)
+
+    @staticmethod
+    def _normalize_depth_levels(levels):
+        """Validate optional depth levels request (1-20)."""
+        if levels is None:
+            return None
+        try:
+            normalized = int(levels)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("levels must be an integer between 1 and 20") from exc
+        if normalized < _DEPTH_LEVELS_MIN or normalized > _DEPTH_LEVELS_MAX:
+            raise ValueError(
+                f"levels must be between {_DEPTH_LEVELS_MIN} and {_DEPTH_LEVELS_MAX}"
+            )
+        return normalized
 
     @staticmethod
     def _jittered_reconnect_delay(delay, max_reconnect_delay):

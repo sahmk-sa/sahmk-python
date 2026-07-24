@@ -33,6 +33,8 @@ from sahmk.models import (
     DividendPayment,
     Event,
     EventsResponse,
+    DepthLevel,
+    MarketDepth,
 )
 
 
@@ -294,6 +296,34 @@ class TestMarketModels:
         assert ms.index_value == 11458.11
         assert ms.market_mood == "bullish"
         assert ms["advancing"] == 117
+
+    def test_market_depth(self):
+        data = {
+            "symbol": "2222",
+            "updated_at": "2026-07-23T12:19:57.945165+00:00",
+            "session": "regular",
+            "book_state": "normal",
+            "levels": 2,
+            "best_bid": 26.8,
+            "best_ask": 26.84,
+            "spread": 0.04,
+            "spread_bps": 14.93,
+            "total_bid_quantity_top5": 36,
+            "total_ask_quantity_top5": 72849,
+            "level_imbalance": -0.895,
+            "bids": [{"level": 0, "price": 26.8, "quantity": 16, "order_count": 2}],
+            "asks": [{"level": 0, "price": 26.84, "quantity": 65031, "order_count": 50}],
+            "entitled_levels": 5,
+        }
+        depth = MarketDepth.from_dict(data)
+        assert depth.symbol == "2222"
+        assert depth.best_bid == 26.8
+        assert depth.spread == 0.04
+        assert isinstance(depth.bids[0], DepthLevel)
+        assert depth.bids[0].price == 26.8
+        assert depth.asks[0].order_count == 50
+        assert depth["book_state"] == "normal"
+        assert depth.entitled_levels == 5
 
     def test_market_movers_from_gainers(self):
         data = {

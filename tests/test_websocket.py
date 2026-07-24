@@ -6,7 +6,7 @@ import pytest
 from unittest import mock
 
 from sahmk import SahmkClient
-from sahmk.client import SahmkError, WS_URL
+from sahmk.client import SahmkError, WS_URL, DEPTH_WS_URL
 
 
 class MockWebSocket:
@@ -899,3 +899,163 @@ class TestStreamConnectionMethod:
         assert len(quotes) == 1
         assert quotes[0]["symbol"] == "2222"
         assert quotes[0]["data"]["price"] == 32.50
+
+
+class TestDepthWebSocketStream:
+    """Tests for the stream_depth method."""
+
+    @pytest.mark.asyncio
+    async def test_stream_depth_url_construction(self, mock_client):
+        """Depth stream should use the dedicated depth WS endpoint."""
+        mock_ws = MockWebSocket(
+            connect_response={
+                "type": "connected",
+                "channel": "depth",
+                "limits": {
+                    "max_symbols_per_connection": 60,
+                    "max_symbols_per_call": 20,
+                },
+            },
+            recv_sequence=[{"type": "subscribed", "symbols": ["2222"]}],
+        )
+
+        with mock.patch("websockets.connect", return_value=mock_ws) as connect_mock:
+            try:
+                await asyncio.wait_for(
+                    mock_client.stream_depth(["2222"]),
+                    timeout=0.1,
+                )
+            except asyncio.TimeoutError:
+                pass
+
+        url = connect_mock.call_args[0][0]
+        assert url.startswith(DEPTH_WS_URL)
+        assert f"api_key={mock_client.api_key}" in url
+
+    @pytest.mark.asyncio
+    async def test_stream_depth_subscribe_includes_levels(self, mock_client):
+        """Depth subscribe payload should include optional levels."""
+        mock_ws = MockWebSocket(
+            connect_response={
+                "type": "connected",
+                "channel": "depth",
+                "limits": {
+                    "max_symbols_per_connection": 60,
+                    "max_symbols_per_call": 20,
+                },
+            },
+            recv_sequence=[{"type": "subscribed", "symbols": ["2222"]}],
+        )
+
+        with mock.patch("websockets.connect", return_value=mock_ws):
+            try:
+                await asyncio.wait_for(
+                    mock_client.stream_depth(["2222"], levels=5),
+                    timeout=0.1,
+                )
+            except asyncio.TimeoutError:
+                pass
+
+        subscribe_calls = [
+            m for m in mock_ws.sent_messages if m.get("action") == "subscribe"
+        ]
+        assert len(subscribe_calls) == 1
+        assert subscribe_calls[0]["symbols"] == ["2222"]
+        assert subscribe_calls[0]["levels"] == 5
+
+    @pytest.mark.asyncio
+    async def test_stream_depth_forwards_snapshot_before_ack(self, mock_client):
+        """Depth snapshots emitted before subscribed ack should reach on_depth."""
+        snapshots = []
+
+        async def on_depth(data):
+            snapshots.append(data)
+
+        mock_ws = MockWebSocket(
+            connect_response={
+                "type": "connected",
+                "channel": "depth",
+                "limits": {
+                    "max_symbols_per_connection": 60,
+                    "max_symbols_per_call": 20,
+                },
+            },
+            recv_sequence=[
+                {
+                    "type": "depth_snapshot",
+                    "available": True,
+                    "symbol": "2222",
+                    "best_bid": 26.8,
+                    "best_ask": 26.84,
+                },
+                {"type": "subscribed", "symbols": ["2222"], "total": 1, "limit": 60},
+            ],
+        )
+
+        with mock.patch("websockets.connect", return_value=mock_ws):
+            try:
+                await asyncio.wait_for(
+                    mock_client.stream_depth(["2222"], on_depth=on_depth),
+                    timeout=0.1,
+                )
+            except asyncio.TimeoutError:
+                pass
+
+        assert len(snapshots) == 1
+        assert snapshots[0]["symbol"] == "2222"
+        assert snapshots[0]["best_bid"] == 26.8
+
+    @pytest.mark.asyncio
+    async def test_depth_callback_receives_streamed_snapshots(self, mock_client):
+        """on_depth should receive snapshots after subscribe completes."""
+        snapshots = []
+
+        async def on_depth(data):
+            snapshots.append(data)
+
+        snapshot = {
+            "type": "depth_snapshot",
+            "available": True,
+            "symbol": "2222",
+            "best_bid": 26.8,
+            "best_ask": 26.84,
+        }
+
+        class DepthWebSocket(MockWebSocket):
+            def __init__(self):
+                super().__init__(
+                    connect_response={
+                        "type": "connected",
+                        "channel": "depth",
+                        "limits": {
+                            "max_symbols_per_connection": 60,
+                            "max_symbols_per_call": 20,
+                        },
+                    },
+                    recv_sequence=[
+                        {"type": "subscribed", "symbols": ["2222"]},
+                    ],
+                )
+                self._iter_count = 0
+
+            def __aiter__(self):
+                return self
+
+            async def __anext__(self):
+                self._iter_count += 1
+                if self._iter_count == 1:
+                    return json.dumps(snapshot)
+                raise StopAsyncIteration
+
+        mock_ws = DepthWebSocket()
+
+        with mock.patch("websockets.connect", return_value=mock_ws):
+            with pytest.raises(ConnectionError):
+                await mock_client._stream_depth_connection(
+                    symbols=["2222"],
+                    on_depth=on_depth,
+                )
+
+        assert len(snapshots) == 1
+        assert snapshots[0]["symbol"] == "2222"
+        assert snapshots[0]["best_ask"] == 26.84

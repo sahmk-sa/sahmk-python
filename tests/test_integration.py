@@ -338,6 +338,35 @@ class TestLiveEvents:
             pytest.skip(f"Events requires Pro plan: {e}")
 
 
+class TestLiveDepth:
+    """Live tests for market depth REST (requires depth entitlement)."""
+
+    def test_depth_aramco(self, live_client):
+        """Test fetching Aramco market depth."""
+        try:
+            result = live_client.depth("2222", levels=5)
+        except SahmkError as e:
+            if e.status_code in (403, 404) or (
+                e.error_code
+                and (
+                    "ENTITLEMENT" in str(e.error_code)
+                    or "FEATURE" in str(e.error_code)
+                    or "DEPTH" in str(e.error_code)
+                )
+            ):
+                pytest.skip(f"Depth unavailable for this key/plan: {e}")
+            raise
+
+        assert result["symbol"] == "2222"
+        assert result.best_bid is not None or result.best_ask is not None
+        assert isinstance(result.bids, list)
+        assert isinstance(result.asks, list)
+        print(
+            f"\nDepth 2222: bid={result.best_bid} ask={result.best_ask} "
+            f"levels={result.levels} entitled={result.entitled_levels}"
+        )
+
+
 class TestLiveWebSocket:
     """Live tests for WebSocket streaming (requires Pro+ plan)."""
 
@@ -398,6 +427,43 @@ class TestLiveWebSocket:
         except SahmkError as e:
             if "plan" in str(e).lower() or "upgrade" in str(e).lower():
                 pytest.skip(f"WebSocket requires Pro plan: {e}")
+            raise
+
+    @pytest.mark.asyncio
+    async def test_websocket_depth_aramco(self, live_client):
+        """Test streaming Aramco depth via WebSocket."""
+        try:
+            snapshots = []
+
+            async def on_depth(data):
+                snapshots.append(data)
+                if len(snapshots) >= 1:
+                    raise asyncio.CancelledError("Test complete")
+
+            try:
+                await asyncio.wait_for(
+                    live_client.stream_depth(["2222"], on_depth=on_depth, levels=5),
+                    timeout=10.0,
+                )
+            except asyncio.TimeoutError:
+                pass
+            except asyncio.CancelledError:
+                pass
+
+            print(f"\nDepth WebSocket test: {len(snapshots)} snapshots received")
+            if snapshots:
+                assert snapshots[0].get("type") == "depth_snapshot"
+                assert snapshots[0].get("symbol") == "2222"
+
+        except SahmkError as e:
+            message = str(e).lower()
+            if (
+                "plan" in message
+                or "upgrade" in message
+                or "entitlement" in message
+                or "access" in message
+            ):
+                pytest.skip(f"Depth WebSocket unavailable: {e}")
             raise
 
 

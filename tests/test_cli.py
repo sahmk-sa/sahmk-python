@@ -763,6 +763,45 @@ class TestMainEventsCommand:
         assert "limit=5" in request.url
 
 
+class TestMainDepthCommand:
+    """Tests for main function with depth command."""
+
+    @responses.activate
+    def test_depth_success(self, capsys, sample_depth_response, monkeypatch):
+        """Test successful depth command."""
+        monkeypatch.setenv("SAHMK_API_KEY", "test_key")
+        responses.add(
+            responses.GET,
+            "https://app.sahmk.sa/api/v1/market/depth/2222/",
+            json=sample_depth_response,
+            status=200,
+        )
+
+        exit_code = main(["depth", "2222"])
+
+        assert exit_code == 0
+        captured = capsys.readouterr()
+        assert "26.8" in captured.out
+        assert "best_bid" in captured.out
+
+    @responses.activate
+    def test_depth_with_levels(self, capsys, sample_depth_response, monkeypatch):
+        """Test depth command with --levels."""
+        monkeypatch.setenv("SAHMK_API_KEY", "test_key")
+        responses.add(
+            responses.GET,
+            "https://app.sahmk.sa/api/v1/market/depth/2222/",
+            json=sample_depth_response,
+            status=200,
+        )
+
+        exit_code = main(["depth", "2222", "--levels", "5"])
+
+        assert exit_code == 0
+        request = responses.calls[0].request
+        assert "levels=5" in request.url
+
+
 class TestParserNewCommands:
     """Tests for parsing new CLI commands."""
 
@@ -803,6 +842,20 @@ class TestParserNewCommands:
         args = parser.parse_args(["stream", "2222,1120"])
         assert args.command == "stream"
         assert args.symbols == "2222,1120"
+
+    def test_parser_depth_command(self):
+        parser = _build_parser()
+        args = parser.parse_args(["depth", "2222", "--levels", "5"])
+        assert args.command == "depth"
+        assert args.symbol == "2222"
+        assert args.levels == 5
+
+    def test_parser_stream_depth_command(self):
+        parser = _build_parser()
+        args = parser.parse_args(["stream-depth", "2222,1120", "--levels", "5"])
+        assert args.command == "stream-depth"
+        assert args.symbols == "2222,1120"
+        assert args.levels == 5
 
     def test_parser_ratios_command(self):
         parser = _build_parser()

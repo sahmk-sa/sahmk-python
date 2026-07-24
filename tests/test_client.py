@@ -780,6 +780,50 @@ class TestMarketEndpoints:
         assert "sectors" in result
         assert result["count"] == 2
 
+    @responses.activate
+    def test_depth(self, mock_client, sample_depth_response):
+        """Test getting market depth."""
+        responses.add(
+            responses.GET,
+            f"{mock_client.base_url}/market/depth/2222/",
+            json=sample_depth_response,
+            status=200,
+        )
+
+        result = mock_client.depth("2222")
+
+        assert result["symbol"] == "2222"
+        assert result.best_bid == 26.8
+        assert result.best_ask == 26.84
+        assert result.book_state == "normal"
+        assert len(result.bids) == 2
+        assert result.bids[0].price == 26.8
+        assert result.asks[0].quantity == 65031
+        assert result.entitled_levels == 5
+
+    @responses.activate
+    def test_depth_with_levels(self, mock_client, sample_depth_response):
+        """Test depth levels query param."""
+        responses.add(
+            responses.GET,
+            f"{mock_client.base_url}/market/depth/2222/",
+            json=sample_depth_response,
+            status=200,
+        )
+
+        result = mock_client.depth("2222", levels=5)
+
+        request = responses.calls[0].request
+        assert "levels=5" in request.url
+        assert result.levels == 5
+
+    def test_depth_invalid_levels_raises(self, mock_client):
+        """Test depth levels validation."""
+        with pytest.raises(ValueError, match="between 1 and 20"):
+            mock_client.depth("2222", levels=0)
+        with pytest.raises(ValueError, match="between 1 and 20"):
+            mock_client.depth("2222", levels=21)
+
     def test_market_methods_invalid_index_raises(self, mock_client):
         """Test invalid market index is rejected client-side."""
         with pytest.raises(SahmkInvalidIndexError):

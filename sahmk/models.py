@@ -1067,3 +1067,71 @@ class EventsResponse(_DictAccessMixin):
             available_types=data.get("available_types", []),
             raw=data,
         )
+
+
+# ---------------------------------------------------------------------------
+# Market Depth
+# ---------------------------------------------------------------------------
+
+@dataclass
+class DepthLevel(_DictAccessMixin):
+    """A single bid/ask level from market depth."""
+
+    level: Optional[int] = None
+    price: Optional[float] = None
+    quantity: Optional[int] = None
+    order_count: Optional[int] = None
+    raw: Dict[str, Any] = field(default_factory=dict, repr=False)
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "DepthLevel":
+        return cls(
+            level=data.get("level"),
+            price=data.get("price"),
+            quantity=data.get("quantity"),
+            order_count=data.get("order_count"),
+            raw=data,
+        )
+
+
+@dataclass
+class MarketDepth(_DictAccessMixin):
+    """Response from GET /market/depth/{symbol}/ (and depth WS snapshots)."""
+
+    symbol: Optional[str] = None
+    updated_at: Optional[str] = None
+    session: Optional[str] = None
+    book_state: Optional[str] = None
+    levels: Optional[int] = None
+    best_bid: Optional[float] = None
+    best_ask: Optional[float] = None
+    spread: Optional[float] = None
+    spread_bps: Optional[float] = None
+    total_bid_quantity_top5: Optional[int] = None
+    total_ask_quantity_top5: Optional[int] = None
+    level_imbalance: Optional[float] = None
+    bids: List[DepthLevel] = field(default_factory=list)
+    asks: List[DepthLevel] = field(default_factory=list)
+    entitled_levels: Optional[int] = None
+    raw: Dict[str, Any] = field(default_factory=dict, repr=False)
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "MarketDepth":
+        return cls(
+            symbol=data.get("symbol"),
+            updated_at=data.get("updated_at"),
+            session=data.get("session"),
+            book_state=data.get("book_state"),
+            levels=data.get("levels"),
+            best_bid=data.get("best_bid"),
+            best_ask=data.get("best_ask"),
+            spread=data.get("spread"),
+            spread_bps=data.get("spread_bps"),
+            total_bid_quantity_top5=data.get("total_bid_quantity_top5"),
+            total_ask_quantity_top5=data.get("total_ask_quantity_top5"),
+            level_imbalance=data.get("level_imbalance"),
+            bids=[DepthLevel.from_dict(b) for b in data.get("bids", []) or []],
+            asks=[DepthLevel.from_dict(a) for a in data.get("asks", []) or []],
+            entitled_levels=data.get("entitled_levels"),
+            raw=data,
+        )

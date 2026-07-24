@@ -159,12 +159,39 @@ def _build_parser():
     )
     _compact_arg(events_parser)
 
+    depth_parser = subparsers.add_parser(
+        "depth", help="Get market depth / order book for a symbol."
+    )
+    depth_parser.add_argument("symbol", help='Stock symbol (e.g., "2222").')
+    depth_parser.add_argument(
+        "--levels",
+        type=int,
+        default=None,
+        help="Number of book levels to request (1-20).",
+    )
+    _compact_arg(depth_parser)
+
     stream_parser = subparsers.add_parser(
         "stream", help="Stream real-time quotes via WebSocket (Pro+ plan)."
     )
     stream_parser.add_argument(
         "symbols",
         help='Comma-separated symbols to stream, e.g. "2222,1120".',
+    )
+
+    stream_depth_parser = subparsers.add_parser(
+        "stream-depth",
+        help="Stream real-time market depth via WebSocket.",
+    )
+    stream_depth_parser.add_argument(
+        "symbols",
+        help='Comma-separated symbols to stream, e.g. "2222,1120".',
+    )
+    stream_depth_parser.add_argument(
+        "--levels",
+        type=int,
+        default=None,
+        help="Number of book levels to request (1-20).",
     )
 
     return parser
@@ -223,6 +250,50 @@ def _run_stream(client, symbols):
             on_error=on_error,
             on_disconnect=on_disconnect,
             on_reconnect=on_reconnect,
+        )
+
+    try:
+        asyncio.run(_stream())
+    except KeyboardInterrupt:
+        pass
+
+
+def _run_stream_depth(client, symbols, levels=None):
+    """Run the depth WebSocket stream, printing snapshots as JSON lines."""
+
+    async def on_depth(msg):
+        print(json.dumps(msg, ensure_ascii=False), flush=True)
+
+    async def on_error(error):
+        err_msg = error.get("message", str(error))
+        code = error.get("code")
+        payload = {"error": err_msg}
+        if code is not None:
+            payload["code"] = code
+        print(json.dumps(payload, ensure_ascii=False), file=sys.stderr, flush=True)
+
+    async def on_disconnect(reason):
+        print(
+            json.dumps({"status": "disconnected", "reason": reason}, ensure_ascii=False),
+            file=sys.stderr,
+            flush=True,
+        )
+
+    async def on_reconnect(attempt):
+        print(
+            json.dumps({"status": "reconnecting", "attempt": attempt}, ensure_ascii=False),
+            file=sys.stderr,
+            flush=True,
+        )
+
+    async def _stream():
+        await client.stream_depth(
+            symbols,
+            on_depth=on_depth,
+            on_error=on_error,
+            on_disconnect=on_disconnect,
+            on_reconnect=on_reconnect,
+            levels=levels,
         )
 
     try:
@@ -293,15 +364,26 @@ def main(argv=None):
             result = client.dividends(args.symbol)
         elif args.command == "events":
             result = client.events(symbol=args.symbol, limit=args.limit)
+        elif args.command == "depth":
+            result = client.depth(args.symbol, levels=args.levels)
         elif args.command == "stream":
             symbols = [s.strip() for s in args.symbols.split(",") if s.strip()]
             if not symbols:
                 parser.error("At least one symbol is required for stream.")
             _run_stream(client, symbols)
             return 0
+        elif args.command == "stream-depth":
+            symbols = [s.strip() for s in args.symbols.split(",") if s.strip()]
+            if not symbols:
+                parser.error("At least one symbol is required for stream-depth.")
+            _run_stream_depth(client, symbols, levels=args.levels)
+            return 0
         else:
             parser.error("Unknown command.")
             return 2
+    except ValueError as exc:
+        print(json.dumps({"error": str(exc)}, ensure_ascii=False, indent=2), file=sys.stderr)
+        return 1
     except SahmkError as exc:
         err = {"error": str(exc)}
         if exc.error_code:
