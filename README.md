@@ -252,7 +252,7 @@ Base URL: `https://app.sahmk.sa/api/v1`
 | `GET /market/volume/` | Free | Volume leaders |
 | `GET /market/value/` | Free | Value leaders |
 | `GET /market/sectors/` | Free | Sector performance |
-| `GET /market/depth/{symbol}/` | Entitled | Market depth / order book (`levels` 1-20) |
+| `GET /market/depth/{symbol}/` | Entitled | Market depth / order book (`levels` 1-20). [Request access](https://www.sahmk.sa/developers/dashboard/realtime-access) |
 | `GET /companies/` | Free | Company directory and symbol discovery |
 | `GET /company/{symbol}/` | Free+ | Company info (tiered by plan) |
 | `GET /financials/{symbol}/` | Starter+ | Financial statements |
@@ -279,6 +279,9 @@ Example scripts:
 - [websocket_depth.py](https://github.com/sahmk-sa/sahmk-python/blob/main/examples/websocket_depth.py)
 
 ## Market Depth
+
+Market depth REST and WebSocket access are entitlement-gated. Request access from the
+[developer realtime-access dashboard](https://www.sahmk.sa/developers/dashboard/realtime-access).
 
 ```python
 depth = client.depth("2222", levels=5)
