@@ -32,3 +32,8 @@ jobs:
 
       - name: Publish package to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          # Attestations depend on Sigstore/Rekor availability; disable to keep
+          # publish resilient when those services return transient 5xx.
+          attestations: false
+          skip-existing: true
