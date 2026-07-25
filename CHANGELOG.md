@@ -4,6 +4,13 @@ All notable changes to the `sahmk` Python SDK will be documented in this file.
 
 This project follows [Semantic Versioning](https://semver.org/).
 
+## [0.13.1] — 2026-07-25
+
+### Changed
+
+- README now links the market-depth entitlement request flow to the
+  [realtime-access dashboard](https://www.sahmk.sa/developers/dashboard/realtime-access).
+
 ## [0.13.0] — 2026-07-24
 
 ### Added
