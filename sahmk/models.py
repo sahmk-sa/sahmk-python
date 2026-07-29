@@ -1135,3 +1135,85 @@ class MarketDepth(_DictAccessMixin):
             entitled_levels=data.get("entitled_levels"),
             raw=data,
         )
+
+
+# ---------------------------------------------------------------------------
+# Live Trades
+# ---------------------------------------------------------------------------
+
+@dataclass
+class TradeEvent(_DictAccessMixin):
+    """A single trade print from GET /market/trades/{symbol}/ or WS trade."""
+
+    event_time: Optional[str] = None
+    price: Optional[float] = None
+    quantity: Optional[int] = None
+    value: Optional[float] = None
+    side: Optional[str] = None
+    market_session: Optional[str] = None
+    symbol: Optional[str] = None
+    timestamp: Optional[str] = None
+    raw: Dict[str, Any] = field(default_factory=dict, repr=False)
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "TradeEvent":
+        return cls(
+            event_time=data.get("event_time"),
+            price=data.get("price"),
+            quantity=data.get("quantity"),
+            value=data.get("value"),
+            side=data.get("side"),
+            market_session=data.get("market_session"),
+            symbol=data.get("symbol"),
+            timestamp=data.get("timestamp"),
+            raw=data,
+        )
+
+
+@dataclass
+class TradesSummary(_DictAccessMixin):
+    """Aggregate summary for a trades response."""
+
+    event_count: Optional[int] = None
+    trade_quantity: Optional[int] = None
+    trade_value: Optional[float] = None
+    latest_event_time: Optional[str] = None
+    raw: Dict[str, Any] = field(default_factory=dict, repr=False)
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "TradesSummary":
+        return cls(
+            event_count=data.get("event_count"),
+            trade_quantity=data.get("trade_quantity"),
+            trade_value=data.get("trade_value"),
+            latest_event_time=data.get("latest_event_time"),
+            raw=data,
+        )
+
+
+@dataclass
+class TradesResponse(_DictAccessMixin):
+    """Response from GET /market/trades/{symbol}/ (and trades WS snapshots)."""
+
+    symbol: Optional[str] = None
+    updated_at: Optional[str] = None
+    count: Optional[int] = None
+    events: List[TradeEvent] = field(default_factory=list)
+    summary: Optional[TradesSummary] = None
+    raw: Dict[str, Any] = field(default_factory=dict, repr=False)
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "TradesResponse":
+        summary_data = data.get("summary")
+        return cls(
+            symbol=data.get("symbol"),
+            updated_at=data.get("updated_at"),
+            count=data.get("count"),
+            events=[TradeEvent.from_dict(e) for e in data.get("events", []) or []],
+            summary=(
+                TradesSummary.from_dict(summary_data)
+                if isinstance(summary_data, dict)
+                else None
+            ),
+            raw=data,
+        )

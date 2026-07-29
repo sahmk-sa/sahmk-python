@@ -15,10 +15,11 @@ Use one client for live Tadawul quotes, market-level insights, company/fundament
 - **Historical OHLCV** data with date-range support (`1d`, `1w`, `1m`, `30m`, `60m`)
 - **Market overview** with index scoping (`TASI`/`NOMU`)
 - **Market depth** order book snapshots (entitlement-gated)
+- **Live trades** recent prints and real-time tape (Pro+)
 - **Company directory** endpoint for symbol discovery
 - **Company/fundamental** data (plan-dependent fields)
 - **Financials, dividends, and events** endpoints (by plan)
-- **WebSocket streaming** for real-time quotes and depth (Pro+/entitled)
+- **WebSocket streaming** for quotes, depth, and trades (Pro+/entitled)
 
 ## Installation
 
@@ -177,8 +178,10 @@ sahmk compare 2222,1120 --metrics extended
 sahmk dividends 2222
 sahmk events --symbol 2222 --limit 5
 sahmk depth 2222 --levels 5
+sahmk trades 2222 --limit 20
 sahmk stream 2222,1120
 sahmk stream-depth 2222,1120 --levels 5
+sahmk stream-trades 2222,1120
 ```
 
 You can also pass the key directly:
@@ -253,6 +256,7 @@ Base URL: `https://app.sahmk.sa/api/v1`
 | `GET /market/value/` | Free | Value leaders |
 | `GET /market/sectors/` | Free | Sector performance |
 | `GET /market/depth/{symbol}/` | Entitled | Market depth / order book (`levels` 1-20). [Request access](https://www.sahmk.sa/developers/dashboard/realtime-access) |
+| `GET /market/trades/{symbol}/` | Pro+ | Recent live trade prints (`limit` 1-200) |
 | `GET /companies/` | Free | Company directory and symbol discovery |
 | `GET /company/{symbol}/` | Free+ | Company info (tiered by plan) |
 | `GET /financials/{symbol}/` | Starter+ | Financial statements |
@@ -274,9 +278,11 @@ Example scripts:
 - [historical.py](https://github.com/sahmk-sa/sahmk-python/blob/main/examples/historical.py)
 - [market_summary.py](https://github.com/sahmk-sa/sahmk-python/blob/main/examples/market_summary.py)
 - [depth.py](https://github.com/sahmk-sa/sahmk-python/blob/main/examples/depth.py)
+- [trades.py](https://github.com/sahmk-sa/sahmk-python/blob/main/examples/trades.py)
 - [analytics.py](https://github.com/sahmk-sa/sahmk-python/blob/main/examples/analytics.py)
 - [websocket_stream.py](https://github.com/sahmk-sa/sahmk-python/blob/main/examples/websocket_stream.py)
 - [websocket_depth.py](https://github.com/sahmk-sa/sahmk-python/blob/main/examples/websocket_depth.py)
+- [websocket_trades.py](https://github.com/sahmk-sa/sahmk-python/blob/main/examples/websocket_trades.py)
 
 ## Market Depth
 
@@ -295,6 +301,25 @@ CLI:
 ```bash
 sahmk depth 2222 --levels 5
 sahmk stream-depth 2222,1120 --levels 5
+```
+
+## Live Trades (Pro+)
+
+Recent trade prints (REST) and a real-time tape (WebSocket). Same Pro+ plan bar as
+Best Price–style realtime — no separate trades product request.
+
+```python
+trades = client.trades("2222", limit=20)
+print(trades.count, trades.summary.trade_value)
+for event in trades.events:
+    print(event.event_time, event.price, event.quantity)
+```
+
+CLI:
+
+```bash
+sahmk trades 2222 --limit 20
+sahmk stream-trades 2222,1120
 ```
 
 ## WebSocket Streaming (Pro+)
@@ -318,6 +343,20 @@ async def on_depth(msg):
     print(f"{msg['symbol']}: {msg['best_bid']} / {msg['best_ask']}")
 
 asyncio.run(client.stream_depth(["2222"], on_depth=on_depth, levels=5))
+```
+
+Trades streaming also uses a dedicated channel:
+
+```python
+async def on_trade(msg):
+    print(f"{msg['symbol']}: {msg['price']} x {msg['quantity']}")
+
+async def on_snapshot(msg):
+    print(f"snapshot {msg['symbol']}: {msg['count']} events")
+
+asyncio.run(
+    client.stream_trades(["2222"], on_trade=on_trade, on_snapshot=on_snapshot)
+)
 ```
 
 The streaming client auto-reconnects with exponential backoff + jitter and

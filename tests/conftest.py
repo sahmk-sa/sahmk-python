@@ -147,6 +147,36 @@ def sample_depth_response():
 
 
 @pytest.fixture
+def sample_trades_response():
+    """Sample live trades API response (matches live API shape)."""
+    return {
+        "symbol": "2222",
+        "updated_at": "2026-07-29T11:21:23+00:00",
+        "count": 2,
+        "events": [
+            {
+                "event_time": "2026-07-29T11:21:23+00:00",
+                "price": 26.18,
+                "quantity": 750,
+                "value": 19635.0,
+            },
+            {
+                "event_time": "2026-07-29T11:21:18+00:00",
+                "price": 26.2,
+                "quantity": 4,
+                "value": 104.8,
+            },
+        ],
+        "summary": {
+            "event_count": 2,
+            "trade_quantity": 754,
+            "trade_value": 19739.8,
+            "latest_event_time": "2026-07-29T11:21:23+00:00",
+        },
+    }
+
+
+@pytest.fixture
 def sample_gainers_response():
     """Sample gainers API response."""
     return {

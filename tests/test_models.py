@@ -35,6 +35,9 @@ from sahmk.models import (
     EventsResponse,
     DepthLevel,
     MarketDepth,
+    TradeEvent,
+    TradesSummary,
+    TradesResponse,
 )
 
 
@@ -324,6 +327,34 @@ class TestMarketModels:
         assert depth.asks[0].order_count == 50
         assert depth["book_state"] == "normal"
         assert depth.entitled_levels == 5
+
+    def test_trades_response(self):
+        data = {
+            "symbol": "2222",
+            "updated_at": "2026-07-29T11:21:23+00:00",
+            "count": 1,
+            "events": [
+                {
+                    "event_time": "2026-07-29T11:21:23+00:00",
+                    "price": 26.18,
+                    "quantity": 750,
+                    "value": 19635.0,
+                }
+            ],
+            "summary": {
+                "event_count": 1,
+                "trade_quantity": 750,
+                "trade_value": 19635.0,
+                "latest_event_time": "2026-07-29T11:21:23+00:00",
+            },
+        }
+        resp = TradesResponse.from_dict(data)
+        assert resp.symbol == "2222"
+        assert isinstance(resp.events[0], TradeEvent)
+        assert resp.events[0].price == 26.18
+        assert isinstance(resp.summary, TradesSummary)
+        assert resp.summary.trade_value == 19635.0
+        assert resp["count"] == 1
 
     def test_market_movers_from_gainers(self):
         data = {

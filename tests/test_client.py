@@ -824,6 +824,47 @@ class TestMarketEndpoints:
         with pytest.raises(ValueError, match="between 1 and 20"):
             mock_client.depth("2222", levels=21)
 
+    @responses.activate
+    def test_trades(self, mock_client, sample_trades_response):
+        """Test getting live trades."""
+        responses.add(
+            responses.GET,
+            f"{mock_client.base_url}/market/trades/2222/",
+            json=sample_trades_response,
+            status=200,
+        )
+
+        result = mock_client.trades("2222")
+
+        assert result["symbol"] == "2222"
+        assert result.count == 2
+        assert len(result.events) == 2
+        assert result.events[0].price == 26.18
+        assert result.summary.trade_quantity == 754
+
+    @responses.activate
+    def test_trades_with_limit(self, mock_client, sample_trades_response):
+        """Test trades limit query param."""
+        responses.add(
+            responses.GET,
+            f"{mock_client.base_url}/market/trades/2222/",
+            json=sample_trades_response,
+            status=200,
+        )
+
+        result = mock_client.trades("2222", limit=5)
+
+        request = responses.calls[0].request
+        assert "limit=5" in request.url
+        assert result.count == 2
+
+    def test_trades_invalid_limit_raises(self, mock_client):
+        """Test trades limit validation."""
+        with pytest.raises(ValueError, match="between 1 and 200"):
+            mock_client.trades("2222", limit=0)
+        with pytest.raises(ValueError, match="between 1 and 200"):
+            mock_client.trades("2222", limit=201)
+
     def test_market_methods_invalid_index_raises(self, mock_client):
         """Test invalid market index is rejected client-side."""
         with pytest.raises(SahmkInvalidIndexError):

@@ -367,6 +367,35 @@ class TestLiveDepth:
         )
 
 
+class TestLiveTrades:
+    """Live tests for trades REST (requires Pro+)."""
+
+    def test_trades_aramco(self, live_client):
+        """Test fetching Aramco live trades."""
+        try:
+            result = live_client.trades("2222", limit=5)
+        except SahmkError as e:
+            if e.status_code in (403, 404) or (
+                e.error_code
+                and (
+                    "ENTITLEMENT" in str(e.error_code)
+                    or "FEATURE" in str(e.error_code)
+                    or "PLAN" in str(e.error_code)
+                    or "TRADES" in str(e.error_code)
+                )
+            ):
+                pytest.skip(f"Trades unavailable for this key/plan: {e}")
+            raise
+
+        assert result["symbol"] == "2222"
+        assert isinstance(result.events, list)
+        assert result.count == len(result.events)
+        print(
+            f"\nTrades 2222: count={result.count} "
+            f"summary_qty={getattr(result.summary, 'trade_quantity', None)}"
+        )
+
+
 class TestLiveWebSocket:
     """Live tests for WebSocket streaming (requires Pro+ plan)."""
 
@@ -464,6 +493,56 @@ class TestLiveWebSocket:
                 or "access" in message
             ):
                 pytest.skip(f"Depth WebSocket unavailable: {e}")
+            raise
+
+    @pytest.mark.asyncio
+    async def test_websocket_trades_aramco(self, live_client):
+        """Test streaming Aramco trades via WebSocket."""
+        try:
+            trades = []
+            snapshots = []
+
+            async def on_trade(data):
+                trades.append(data)
+                raise asyncio.CancelledError("Test complete")
+
+            async def on_snapshot(data):
+                snapshots.append(data)
+
+            try:
+                await asyncio.wait_for(
+                    live_client.stream_trades(
+                        ["2222"],
+                        on_trade=on_trade,
+                        on_snapshot=on_snapshot,
+                    ),
+                    timeout=15.0,
+                )
+            except asyncio.TimeoutError:
+                pass
+            except asyncio.CancelledError:
+                pass
+
+            print(
+                f"\nTrades WebSocket test: "
+                f"{len(snapshots)} snapshots, {len(trades)} trades"
+            )
+            if snapshots:
+                assert snapshots[0].get("type") == "trades_snapshot"
+                assert snapshots[0].get("symbol") == "2222"
+            if trades:
+                assert trades[0].get("type") == "trade"
+                assert trades[0].get("symbol") == "2222"
+
+        except SahmkError as e:
+            message = str(e).lower()
+            if (
+                "plan" in message
+                or "upgrade" in message
+                or "entitlement" in message
+                or "access" in message
+            ):
+                pytest.skip(f"Trades WebSocket unavailable: {e}")
             raise
 
 

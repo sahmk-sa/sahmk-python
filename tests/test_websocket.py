@@ -6,7 +6,7 @@ import pytest
 from unittest import mock
 
 from sahmk import SahmkClient
-from sahmk.client import SahmkError, WS_URL, DEPTH_WS_URL
+from sahmk.client import SahmkError, WS_URL, DEPTH_WS_URL, TRADES_WS_URL
 
 
 class MockWebSocket:
@@ -1059,3 +1059,102 @@ class TestDepthWebSocketStream:
         assert len(snapshots) == 1
         assert snapshots[0]["symbol"] == "2222"
         assert snapshots[0]["best_ask"] == 26.84
+
+
+class TestTradesWebSocketStream:
+    """Tests for the stream_trades method."""
+
+    @pytest.mark.asyncio
+    async def test_stream_trades_url_construction(self, mock_client):
+        """Trades stream should use the dedicated trades WS endpoint."""
+        mock_ws = MockWebSocket(
+            connect_response={
+                "type": "connected",
+                "channel": "trades",
+                "limits": {
+                    "max_symbols_per_connection": 60,
+                    "max_symbols_per_call": 20,
+                },
+            },
+            recv_sequence=[{"type": "subscribed", "symbols": ["2222"]}],
+        )
+
+        with mock.patch("websockets.connect", return_value=mock_ws) as connect_mock:
+            try:
+                await asyncio.wait_for(
+                    mock_client.stream_trades(["2222"]),
+                    timeout=0.1,
+                )
+            except asyncio.TimeoutError:
+                pass
+
+        url = connect_mock.call_args[0][0]
+        assert url.startswith(TRADES_WS_URL)
+        assert f"api_key={mock_client.api_key}" in url
+
+    @pytest.mark.asyncio
+    async def test_stream_trades_forwards_snapshot_and_trade(self, mock_client):
+        """Trade and snapshot callbacks should receive streamed messages."""
+        trades = []
+        snapshots = []
+
+        async def on_trade(data):
+            trades.append(data)
+
+        async def on_snapshot(data):
+            snapshots.append(data)
+
+        trade_msg = {
+            "type": "trade",
+            "symbol": "2222",
+            "price": 26.2,
+            "quantity": 1,
+            "value": 26.2,
+        }
+        snapshot_msg = {
+            "type": "trades_snapshot",
+            "symbol": "2222",
+            "count": 1,
+            "events": [{"price": 26.2, "quantity": 1, "value": 26.2}],
+        }
+
+        class TradesWebSocket(MockWebSocket):
+            def __init__(self):
+                super().__init__(
+                    connect_response={
+                        "type": "connected",
+                        "channel": "trades",
+                        "limits": {
+                            "max_symbols_per_connection": 60,
+                            "max_symbols_per_call": 20,
+                        },
+                    },
+                    recv_sequence=[{"type": "subscribed", "symbols": ["2222"]}],
+                )
+                self._iter_count = 0
+
+            def __aiter__(self):
+                return self
+
+            async def __anext__(self):
+                self._iter_count += 1
+                if self._iter_count == 1:
+                    return json.dumps(snapshot_msg)
+                if self._iter_count == 2:
+                    return json.dumps(trade_msg)
+                raise StopAsyncIteration
+
+        mock_ws = TradesWebSocket()
+
+        with mock.patch("websockets.connect", return_value=mock_ws):
+            with pytest.raises(ConnectionError):
+                await mock_client._stream_trades_connection(
+                    symbols=["2222"],
+                    on_trade=on_trade,
+                    on_snapshot=on_snapshot,
+                )
+
+        assert len(snapshots) == 1
+        assert snapshots[0]["symbol"] == "2222"
+        assert len(trades) == 1
+        assert trades[0]["price"] == 26.2

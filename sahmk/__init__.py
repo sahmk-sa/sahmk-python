@@ -40,9 +40,12 @@ from .models import (
     Liquidity,
     DepthLevel,
     MarketDepth,
+    TradeEvent,
+    TradesSummary,
+    TradesResponse,
 )
 
-__version__ = "0.13.1"
+__version__ = "0.14.0"
 __all__ = [
     "SahmkClient",
     "SahmkError",
@@ -83,4 +86,7 @@ __all__ = [
     "Liquidity",
     "DepthLevel",
     "MarketDepth",
+    "TradeEvent",
+    "TradesSummary",
+    "TradesResponse",
 ]

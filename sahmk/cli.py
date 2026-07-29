@@ -194,6 +194,27 @@ def _build_parser():
         help="Number of book levels to request (1-20).",
     )
 
+    trades_parser = subparsers.add_parser(
+        "trades", help="Get recent live trade prints for a symbol (Pro+)."
+    )
+    trades_parser.add_argument("symbol", help='Stock symbol (e.g., "2222").')
+    trades_parser.add_argument(
+        "--limit",
+        type=int,
+        default=None,
+        help="Max trade events to return (1-200).",
+    )
+    _compact_arg(trades_parser)
+
+    stream_trades_parser = subparsers.add_parser(
+        "stream-trades",
+        help="Stream real-time trade prints via WebSocket (Pro+).",
+    )
+    stream_trades_parser.add_argument(
+        "symbols",
+        help='Comma-separated symbols to stream, e.g. "2222,1120".',
+    )
+
     return parser
 
 
@@ -302,6 +323,53 @@ def _run_stream_depth(client, symbols, levels=None):
         pass
 
 
+def _run_stream_trades(client, symbols):
+    """Run the trades WebSocket stream, printing snapshots/trades as JSON lines."""
+
+    async def on_trade(msg):
+        print(json.dumps(msg, ensure_ascii=False), flush=True)
+
+    async def on_snapshot(msg):
+        print(json.dumps(msg, ensure_ascii=False), flush=True)
+
+    async def on_error(error):
+        err_msg = error.get("message", str(error))
+        code = error.get("code")
+        payload = {"error": err_msg}
+        if code is not None:
+            payload["code"] = code
+        print(json.dumps(payload, ensure_ascii=False), file=sys.stderr, flush=True)
+
+    async def on_disconnect(reason):
+        print(
+            json.dumps({"status": "disconnected", "reason": reason}, ensure_ascii=False),
+            file=sys.stderr,
+            flush=True,
+        )
+
+    async def on_reconnect(attempt):
+        print(
+            json.dumps({"status": "reconnecting", "attempt": attempt}, ensure_ascii=False),
+            file=sys.stderr,
+            flush=True,
+        )
+
+    async def _stream():
+        await client.stream_trades(
+            symbols,
+            on_trade=on_trade,
+            on_snapshot=on_snapshot,
+            on_error=on_error,
+            on_disconnect=on_disconnect,
+            on_reconnect=on_reconnect,
+        )
+
+    try:
+        asyncio.run(_stream())
+    except KeyboardInterrupt:
+        pass
+
+
 def main(argv=None):
     parser = _build_parser()
     args = parser.parse_args(argv)
@@ -377,6 +445,14 @@ def main(argv=None):
             if not symbols:
                 parser.error("At least one symbol is required for stream-depth.")
             _run_stream_depth(client, symbols, levels=args.levels)
+            return 0
+        elif args.command == "trades":
+            result = client.trades(args.symbol, limit=args.limit)
+        elif args.command == "stream-trades":
+            symbols = [s.strip() for s in args.symbols.split(",") if s.strip()]
+            if not symbols:
+                parser.error("At least one symbol is required for stream-trades.")
+            _run_stream_trades(client, symbols)
             return 0
         else:
             parser.error("Unknown command.")

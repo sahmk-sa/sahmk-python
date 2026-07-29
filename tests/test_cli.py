@@ -802,6 +802,45 @@ class TestMainDepthCommand:
         assert "levels=5" in request.url
 
 
+class TestMainTradesCommand:
+    """Tests for main function with trades command."""
+
+    @responses.activate
+    def test_trades_success(self, capsys, sample_trades_response, monkeypatch):
+        """Test successful trades command."""
+        monkeypatch.setenv("SAHMK_API_KEY", "test_key")
+        responses.add(
+            responses.GET,
+            "https://app.sahmk.sa/api/v1/market/trades/2222/",
+            json=sample_trades_response,
+            status=200,
+        )
+
+        exit_code = main(["trades", "2222"])
+
+        assert exit_code == 0
+        captured = capsys.readouterr()
+        assert "26.18" in captured.out
+        assert "events" in captured.out
+
+    @responses.activate
+    def test_trades_with_limit(self, capsys, sample_trades_response, monkeypatch):
+        """Test trades command with --limit."""
+        monkeypatch.setenv("SAHMK_API_KEY", "test_key")
+        responses.add(
+            responses.GET,
+            "https://app.sahmk.sa/api/v1/market/trades/2222/",
+            json=sample_trades_response,
+            status=200,
+        )
+
+        exit_code = main(["trades", "2222", "--limit", "20"])
+
+        assert exit_code == 0
+        request = responses.calls[0].request
+        assert "limit=20" in request.url
+
+
 class TestParserNewCommands:
     """Tests for parsing new CLI commands."""
 
@@ -856,6 +895,19 @@ class TestParserNewCommands:
         assert args.command == "stream-depth"
         assert args.symbols == "2222,1120"
         assert args.levels == 5
+
+    def test_parser_trades_command(self):
+        parser = _build_parser()
+        args = parser.parse_args(["trades", "2222", "--limit", "20"])
+        assert args.command == "trades"
+        assert args.symbol == "2222"
+        assert args.limit == 20
+
+    def test_parser_stream_trades_command(self):
+        parser = _build_parser()
+        args = parser.parse_args(["stream-trades", "2222,1120"])
+        assert args.command == "stream-trades"
+        assert args.symbols == "2222,1120"
 
     def test_parser_ratios_command(self):
         parser = _build_parser()

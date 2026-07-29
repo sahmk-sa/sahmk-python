@@ -4,6 +4,17 @@ All notable changes to the `sahmk` Python SDK will be documented in this file.
 
 This project follows [Semantic Versioning](https://semver.org/).
 
+## [0.14.0] — 2026-07-29
+
+### Added
+
+- Live trades REST support via `client.trades(symbol, limit=...)` and typed
+  `TradesResponse` / `TradeEvent` / `TradesSummary` models.
+- Dedicated trades WebSocket streaming via `client.stream_trades(...)` on
+  `/ws/v1/market/trades/` (`trade` + `trades_snapshot` callbacks).
+- CLI commands `sahmk trades` and `sahmk stream-trades`.
+- Examples: `examples/trades.py` and `examples/websocket_trades.py`.
+
 ## [0.13.1] — 2026-07-25
 
 ### Changed
