@@ -12,10 +12,10 @@ import time
 
 import requests
 
-BASE_URL = "https://app.sahmk.sa/api/v1"
-WS_URL = "wss://app.sahmk.sa/ws/v1/stocks/"
-DEPTH_WS_URL = "wss://app.sahmk.sa/ws/v1/market/depth/"
-TRADES_WS_URL = "wss://app.sahmk.sa/ws/v1/market/trades/"
+BASE_URL = "https://api.sahmk.sa/api/v1"
+WS_URL = "wss://api.sahmk.sa/ws/v1/stocks/"
+DEPTH_WS_URL = "wss://api.sahmk.sa/ws/v1/market/depth/"
+TRADES_WS_URL = "wss://api.sahmk.sa/ws/v1/market/trades/"
 
 logger = logging.getLogger("sahmk")
 

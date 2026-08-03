@@ -170,7 +170,7 @@ class TestMainQuoteCommand:
         """Test successful quote command."""
         responses.add(
             responses.GET,
-            "https://app.sahmk.sa/api/v1/quote/2222/",
+            "https://api.sahmk.sa/api/v1/quote/2222/",
             json=sample_quote_response,
             status=200,
         )
@@ -187,7 +187,7 @@ class TestMainQuoteCommand:
         """Test quote command with API error."""
         responses.add(
             responses.GET,
-            "https://app.sahmk.sa/api/v1/quote/INVALID/",
+            "https://api.sahmk.sa/api/v1/quote/INVALID/",
             json={"error": {"code": "NOT_FOUND", "message": "Symbol not found"}},
             status=404,
         )
@@ -216,7 +216,7 @@ class TestMainQuotesCommand:
         """Test successful quotes command."""
         responses.add(
             responses.GET,
-            "https://app.sahmk.sa/api/v1/quotes/",
+            "https://api.sahmk.sa/api/v1/quotes/",
             json=sample_quotes_response,
             status=200,
         )
@@ -244,7 +244,7 @@ class TestMainQuotesCommand:
         monkeypatch.setenv("SAHMK_API_KEY", "test_key")
         responses.add(
             responses.GET,
-            "https://app.sahmk.sa/api/v1/quotes/",
+            "https://api.sahmk.sa/api/v1/quotes/",
             json=sample_quotes_response,
             status=200,
         )
@@ -263,7 +263,7 @@ class TestMainMarketCommand:
         monkeypatch.setenv("SAHMK_API_KEY", "test_key")
         responses.add(
             responses.GET,
-            "https://app.sahmk.sa/api/v1/market/summary/",
+            "https://api.sahmk.sa/api/v1/market/summary/",
             json=sample_market_summary_response,
             status=200,
         )
@@ -280,7 +280,7 @@ class TestMainMarketCommand:
         monkeypatch.setenv("SAHMK_API_KEY", "test_key")
         responses.add(
             responses.GET,
-            "https://app.sahmk.sa/api/v1/market/summary/",
+            "https://api.sahmk.sa/api/v1/market/summary/",
             json={**sample_market_summary_response, "index": "NOMU"},
             status=200,
         )
@@ -297,7 +297,7 @@ class TestMainMarketCommand:
         monkeypatch.setenv("SAHMK_API_KEY", "test_key")
         responses.add(
             responses.GET,
-            "https://app.sahmk.sa/api/v1/market/gainers/",
+            "https://api.sahmk.sa/api/v1/market/gainers/",
             json=sample_gainers_response,
             status=200,
         )
@@ -314,7 +314,7 @@ class TestMainMarketCommand:
         monkeypatch.setenv("SAHMK_API_KEY", "test_key")
         responses.add(
             responses.GET,
-            "https://app.sahmk.sa/api/v1/market/gainers/",
+            "https://api.sahmk.sa/api/v1/market/gainers/",
             json={**sample_gainers_response, "index": "NOMU"},
             status=200,
         )
@@ -330,7 +330,7 @@ class TestMainMarketCommand:
         monkeypatch.setenv("SAHMK_API_KEY", "test_key")
         responses.add(
             responses.GET,
-            "https://app.sahmk.sa/api/v1/market/losers/",
+            "https://api.sahmk.sa/api/v1/market/losers/",
             json=sample_losers_response,
             status=200,
         )
@@ -345,7 +345,7 @@ class TestMainMarketCommand:
         monkeypatch.setenv("SAHMK_API_KEY", "test_key")
         responses.add(
             responses.GET,
-            "https://app.sahmk.sa/api/v1/market/volume/",
+            "https://api.sahmk.sa/api/v1/market/volume/",
             json=sample_volume_leaders_response,
             status=200,
         )
@@ -360,7 +360,7 @@ class TestMainMarketCommand:
         monkeypatch.setenv("SAHMK_API_KEY", "test_key")
         responses.add(
             responses.GET,
-            "https://app.sahmk.sa/api/v1/market/value/",
+            "https://api.sahmk.sa/api/v1/market/value/",
             json=sample_value_leaders_response,
             status=200,
         )
@@ -375,7 +375,7 @@ class TestMainMarketCommand:
         monkeypatch.setenv("SAHMK_API_KEY", "test_key")
         responses.add(
             responses.GET,
-            "https://app.sahmk.sa/api/v1/market/sectors/",
+            "https://api.sahmk.sa/api/v1/market/sectors/",
             json=sample_sectors_response,
             status=200,
         )
@@ -396,7 +396,7 @@ class TestMainHistoricalCommand:
         monkeypatch.setenv("SAHMK_API_KEY", "test_key")
         responses.add(
             responses.GET,
-            "https://app.sahmk.sa/api/v1/historical/2222/",
+            "https://api.sahmk.sa/api/v1/historical/2222/",
             json=sample_historical_response,
             status=200,
         )
@@ -414,7 +414,7 @@ class TestMainHistoricalCommand:
         monkeypatch.setenv("SAHMK_API_KEY", "test_key")
         responses.add(
             responses.GET,
-            "https://app.sahmk.sa/api/v1/historical/2222/",
+            "https://api.sahmk.sa/api/v1/historical/2222/",
             json=sample_historical_response,
             status=200,
         )
@@ -434,7 +434,7 @@ class TestMainHistoricalCommand:
         monkeypatch.setenv("SAHMK_API_KEY", "test_key")
         responses.add(
             responses.GET,
-            "https://app.sahmk.sa/api/v1/historical/2222/",
+            "https://api.sahmk.sa/api/v1/historical/2222/",
             json={**sample_historical_response, "interval": "60m"},
             status=200,
         )
@@ -460,7 +460,7 @@ class TestMainErrorHandling:
         monkeypatch.setenv("SAHMK_API_KEY", "test_key")
         responses.add(
             responses.GET,
-            "https://app.sahmk.sa/api/v1/quote/2222/",
+            "https://api.sahmk.sa/api/v1/quote/2222/",
             body=requests.ConnectionError("Connection refused"),
         )
 
@@ -476,7 +476,7 @@ class TestMainErrorHandling:
         monkeypatch.setenv("SAHMK_API_KEY", "test_key")
         responses.add(
             responses.GET,
-            "https://app.sahmk.sa/api/v1/quote/2222/",
+            "https://api.sahmk.sa/api/v1/quote/2222/",
             json={"error": {"code": "INVALID_KEY", "message": "Invalid API key"}},
             status=401,
         )
@@ -494,7 +494,7 @@ class TestMainErrorHandling:
         monkeypatch.setenv("SAHMK_API_KEY", "test_key")
         responses.add(
             responses.GET,
-            "https://app.sahmk.sa/api/v1/quote/2222/",
+            "https://api.sahmk.sa/api/v1/quote/2222/",
             json={"error": {"code": "NOT_FOUND", "message": "Symbol not found"}},
             status=404,
         )
@@ -527,7 +527,7 @@ class TestMainCompactOutput:
         """Test --compact produces compact JSON."""
         responses.add(
             responses.GET,
-            "https://app.sahmk.sa/api/v1/quote/2222/",
+            "https://api.sahmk.sa/api/v1/quote/2222/",
             json=sample_quote_response,
             status=200,
         )
@@ -543,7 +543,7 @@ class TestMainCompactOutput:
         """Test default (non-compact) output is indented."""
         responses.add(
             responses.GET,
-            "https://app.sahmk.sa/api/v1/quote/2222/",
+            "https://api.sahmk.sa/api/v1/quote/2222/",
             json=sample_quote_response,
             status=200,
         )
@@ -564,7 +564,7 @@ class TestMainCompanyCommand:
         monkeypatch.setenv("SAHMK_API_KEY", "test_key")
         responses.add(
             responses.GET,
-            "https://app.sahmk.sa/api/v1/company/2222/",
+            "https://api.sahmk.sa/api/v1/company/2222/",
             json=sample_company_response,
             status=200,
         )
@@ -586,7 +586,7 @@ class TestMainFinancialsCommand:
         monkeypatch.setenv("SAHMK_API_KEY", "test_key")
         responses.add(
             responses.GET,
-            "https://app.sahmk.sa/api/v1/financials/2222/",
+            "https://api.sahmk.sa/api/v1/financials/2222/",
             json=sample_financials_response,
             status=200,
         )
@@ -607,7 +607,7 @@ class TestMainRatiosCommand:
         monkeypatch.setenv("SAHMK_API_KEY", "test_key")
         responses.add(
             responses.GET,
-            "https://app.sahmk.sa/api/v1/analytics/ratios/2222/",
+            "https://api.sahmk.sa/api/v1/analytics/ratios/2222/",
             json={
                 "symbol": "2222",
                 "ratios": [],
@@ -628,7 +628,7 @@ class TestMainRatiosCommand:
         monkeypatch.setenv("SAHMK_API_KEY", "test_key")
         responses.add(
             responses.GET,
-            "https://app.sahmk.sa/api/v1/analytics/ratios/2222/",
+            "https://api.sahmk.sa/api/v1/analytics/ratios/2222/",
             json={"symbol": "2222", "ratios": [], "meta": {}},
             status=200,
         )
@@ -653,7 +653,7 @@ class TestMainCompareCommand:
         monkeypatch.setenv("SAHMK_API_KEY", "test_key")
         responses.add(
             responses.GET,
-            "https://app.sahmk.sa/api/v1/analytics/compare/",
+            "https://api.sahmk.sa/api/v1/analytics/compare/",
             json={
                 "results": [{"symbol": "2222"}, {"symbol": "1120"}],
                 "count": 2,
@@ -674,7 +674,7 @@ class TestMainCompareCommand:
         monkeypatch.setenv("SAHMK_API_KEY", "test_key")
         responses.add(
             responses.GET,
-            "https://app.sahmk.sa/api/v1/analytics/compare/",
+            "https://api.sahmk.sa/api/v1/analytics/compare/",
             json={"results": [], "count": 0, "meta": {}},
             status=200,
         )
@@ -696,7 +696,7 @@ class TestMainDividendsCommand:
         monkeypatch.setenv("SAHMK_API_KEY", "test_key")
         responses.add(
             responses.GET,
-            "https://app.sahmk.sa/api/v1/dividends/2222/",
+            "https://api.sahmk.sa/api/v1/dividends/2222/",
             json=sample_dividends_response,
             status=200,
         )
@@ -717,7 +717,7 @@ class TestMainEventsCommand:
         monkeypatch.setenv("SAHMK_API_KEY", "test_key")
         responses.add(
             responses.GET,
-            "https://app.sahmk.sa/api/v1/events/",
+            "https://api.sahmk.sa/api/v1/events/",
             json=sample_events_response,
             status=200,
         )
@@ -734,7 +734,7 @@ class TestMainEventsCommand:
         monkeypatch.setenv("SAHMK_API_KEY", "test_key")
         responses.add(
             responses.GET,
-            "https://app.sahmk.sa/api/v1/events/",
+            "https://api.sahmk.sa/api/v1/events/",
             json=sample_events_response,
             status=200,
         )
@@ -751,7 +751,7 @@ class TestMainEventsCommand:
         monkeypatch.setenv("SAHMK_API_KEY", "test_key")
         responses.add(
             responses.GET,
-            "https://app.sahmk.sa/api/v1/events/",
+            "https://api.sahmk.sa/api/v1/events/",
             json=sample_events_response,
             status=200,
         )
@@ -772,7 +772,7 @@ class TestMainDepthCommand:
         monkeypatch.setenv("SAHMK_API_KEY", "test_key")
         responses.add(
             responses.GET,
-            "https://app.sahmk.sa/api/v1/market/depth/2222/",
+            "https://api.sahmk.sa/api/v1/market/depth/2222/",
             json=sample_depth_response,
             status=200,
         )
@@ -790,7 +790,7 @@ class TestMainDepthCommand:
         monkeypatch.setenv("SAHMK_API_KEY", "test_key")
         responses.add(
             responses.GET,
-            "https://app.sahmk.sa/api/v1/market/depth/2222/",
+            "https://api.sahmk.sa/api/v1/market/depth/2222/",
             json=sample_depth_response,
             status=200,
         )
@@ -811,7 +811,7 @@ class TestMainTradesCommand:
         monkeypatch.setenv("SAHMK_API_KEY", "test_key")
         responses.add(
             responses.GET,
-            "https://app.sahmk.sa/api/v1/market/trades/2222/",
+            "https://api.sahmk.sa/api/v1/market/trades/2222/",
             json=sample_trades_response,
             status=200,
         )
@@ -829,7 +829,7 @@ class TestMainTradesCommand:
         monkeypatch.setenv("SAHMK_API_KEY", "test_key")
         responses.add(
             responses.GET,
-            "https://app.sahmk.sa/api/v1/market/trades/2222/",
+            "https://api.sahmk.sa/api/v1/market/trades/2222/",
             json=sample_trades_response,
             status=200,
         )

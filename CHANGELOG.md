@@ -4,6 +4,15 @@ All notable changes to the `sahmk` Python SDK will be documented in this file.
 
 This project follows [Semantic Versioning](https://semver.org/).
 
+## [0.15.0] — 2026-08-04
+
+### Changed
+
+- Default REST and WebSocket hosts now use `api.sahmk.sa` instead of
+  `app.sahmk.sa`. Path shapes are unchanged (`/api/v1/`, `/ws/v1/`).
+- `app.sahmk.sa` remains fully supported via `SahmkClient(base_url=...)` and
+  the CLI `--base-url` flag.
+
 ## [0.14.0] — 2026-07-29
 
 ### Added

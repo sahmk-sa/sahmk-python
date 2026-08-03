@@ -242,7 +242,7 @@ print(summary.is_delayed)  # True/False by entitlement
 
 ## API Reference
 
-Base URL: `https://app.sahmk.sa/api/v1`
+Base URL: `https://api.sahmk.sa/api/v1`
 
 | Endpoint | Plan | Description |
 |----------|------|-------------|

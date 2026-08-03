@@ -248,7 +248,7 @@ class TestWebSocketConstants:
 
     def test_ws_url_constant(self):
         """Test that WS_URL is defined correctly."""
-        assert WS_URL == "wss://app.sahmk.sa/ws/v1/stocks/"
+        assert WS_URL == "wss://api.sahmk.sa/ws/v1/stocks/"
         assert WS_URL.startswith("wss://")
         assert WS_URL.endswith("/")
 
