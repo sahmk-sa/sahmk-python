@@ -256,7 +256,7 @@ Base URL: `https://api.sahmk.sa/api/v1`
 | `GET /market/value/` | Free | Value leaders |
 | `GET /market/sectors/` | Free | Sector performance |
 | `GET /market/depth/{symbol}/` | Entitled | Market depth / order book (`levels` 1-20). [Request access](https://www.sahmk.sa/developers/dashboard/realtime-access) |
-| `GET /market/trades/{symbol}/` | Pro+ | Recent live trade prints (`limit` 1-200) |
+| `GET /market/trades/{symbol}/` | Pro+ | Recent live trade prints (`limit` 1-200, optional `side`) |
 | `GET /companies/` | Free | Company directory and symbol discovery |
 | `GET /company/{symbol}/` | Free+ | Company info (tiered by plan) |
 | `GET /financials/{symbol}/` | Starter+ | Financial statements |
@@ -312,8 +312,10 @@ Best Price–style realtime — no separate trades product request.
 trades = client.trades("2222", limit=20)
 print(trades.count, trades.summary.trade_value)
 for event in trades.events:
-    print(event.event_time, event.price, event.quantity)
+    print(event.event_time, event.price, event.quantity, event.side or "-")
 ```
+
+`event.side` is optional and may be `"buy"`, `"sell"`, or `None` depending on backend availability.
 
 CLI:
 
@@ -349,7 +351,7 @@ Trades streaming also uses a dedicated channel:
 
 ```python
 async def on_trade(msg):
-    print(f"{msg['symbol']}: {msg['price']} x {msg['quantity']}")
+    print(f"{msg['symbol']}: {msg['price']} x {msg['quantity']} side={msg.get('side') or '-'}")
 
 async def on_snapshot(msg):
     print(f"snapshot {msg['symbol']}: {msg['count']} events")

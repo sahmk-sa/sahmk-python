@@ -840,7 +840,43 @@ class TestMarketEndpoints:
         assert result.count == 2
         assert len(result.events) == 2
         assert result.events[0].price == 26.18
+        assert result.events[0].side == "buy"
+        assert result.events[1].side == "sell"
         assert result.summary.trade_quantity == 754
+
+    @responses.activate
+    def test_trades_side_nullable_and_missing(self, mock_client):
+        """Test trades side parsing remains backward compatible."""
+        responses.add(
+            responses.GET,
+            f"{mock_client.base_url}/market/trades/2222/",
+            json={
+                "symbol": "2222",
+                "updated_at": "2026-07-29T11:21:23+00:00",
+                "count": 2,
+                "events": [
+                    {
+                        "event_time": "2026-07-29T11:21:23+00:00",
+                        "price": 26.18,
+                        "quantity": 1,
+                        "value": 26.18,
+                        "side": None,
+                    },
+                    {
+                        "event_time": "2026-07-29T11:21:22+00:00",
+                        "price": 26.17,
+                        "quantity": 1,
+                        "value": 26.17,
+                    },
+                ],
+            },
+            status=200,
+        )
+
+        result = mock_client.trades("2222")
+
+        assert result.events[0].side is None
+        assert result.events[1].side is None
 
     @responses.activate
     def test_trades_with_limit(self, mock_client, sample_trades_response):

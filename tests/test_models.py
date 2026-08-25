@@ -339,6 +339,7 @@ class TestMarketModels:
                     "price": 26.18,
                     "quantity": 750,
                     "value": 19635.0,
+                    "side": "buy",
                 }
             ],
             "summary": {
@@ -352,9 +353,47 @@ class TestMarketModels:
         assert resp.symbol == "2222"
         assert isinstance(resp.events[0], TradeEvent)
         assert resp.events[0].price == 26.18
+        assert resp.events[0].side == "buy"
         assert isinstance(resp.summary, TradesSummary)
         assert resp.summary.trade_value == 19635.0
         assert resp["count"] == 1
+
+    def test_trades_response_side_nullable_or_missing(self):
+        data = {
+            "symbol": "2222",
+            "updated_at": "2026-07-29T11:21:23+00:00",
+            "count": 3,
+            "events": [
+                {"event_time": "2026-07-29T11:21:23+00:00", "price": 26.18, "quantity": 1, "value": 26.18, "side": "buy"},
+                {"event_time": "2026-07-29T11:21:22+00:00", "price": 26.17, "quantity": 1, "value": 26.17, "side": "sell"},
+                {"event_time": "2026-07-29T11:21:21+00:00", "price": 26.16, "quantity": 1, "value": 26.16},
+            ],
+        }
+        resp = TradesResponse.from_dict(data)
+        assert [event.side for event in resp.events] == ["buy", "sell", None]
+
+        nullable = TradeEvent.from_dict(
+            {
+                "event_time": "2026-07-29T11:21:20+00:00",
+                "price": 26.15,
+                "quantity": 1,
+                "value": 26.15,
+                "side": None,
+            }
+        )
+        assert nullable.side is None
+
+    def test_trades_response_side_invalid_is_safely_ignored(self):
+        event = TradeEvent.from_dict(
+            {
+                "event_time": "2026-07-29T11:21:20+00:00",
+                "price": 26.15,
+                "quantity": 1,
+                "value": 26.15,
+                "side": "unknown",
+            }
+        )
+        assert event.side is None
 
     def test_market_movers_from_gainers(self):
         data = {

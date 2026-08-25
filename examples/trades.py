@@ -33,5 +33,5 @@ print()
 for event in trades.events:
     print(
         f"  {event.event_time}  {event.price} x {event.quantity} "
-        f"(value={event.value})"
+        f"side={event.side or '-'} (value={event.value})"
     )

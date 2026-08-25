@@ -159,12 +159,14 @@ def sample_trades_response():
                 "price": 26.18,
                 "quantity": 750,
                 "value": 19635.0,
+                "side": "buy",
             },
             {
                 "event_time": "2026-07-29T11:21:18+00:00",
                 "price": 26.2,
                 "quantity": 4,
                 "value": 104.8,
+                "side": "sell",
             },
         ],
         "summary": {

@@ -390,6 +390,8 @@ class TestLiveTrades:
         assert result["symbol"] == "2222"
         assert isinstance(result.events, list)
         assert result.count == len(result.events)
+        if result.events:
+            assert result.events[0].side in ("buy", "sell", None)
         print(
             f"\nTrades 2222: count={result.count} "
             f"summary_qty={getattr(result.summary, 'trade_quantity', None)}"
@@ -530,9 +532,13 @@ class TestLiveWebSocket:
             if snapshots:
                 assert snapshots[0].get("type") == "trades_snapshot"
                 assert snapshots[0].get("symbol") == "2222"
+                events = snapshots[0].get("events") or []
+                if events:
+                    assert events[0].get("side") in ("buy", "sell", None)
             if trades:
                 assert trades[0].get("type") == "trade"
                 assert trades[0].get("symbol") == "2222"
+                assert trades[0].get("side") in ("buy", "sell", None)
 
         except SahmkError as e:
             message = str(e).lower()

@@ -4,6 +4,19 @@ All notable changes to the `sahmk` Python SDK will be documented in this file.
 
 This project follows [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Changed
+
+- Trades payloads now support optional `side` across SDK models, REST responses,
+  and WebSocket trades/snapshot messages (`"buy"`, `"sell"`, or `null`).
+- Trades docs/examples now document `side` as optional and nullable.
+
+### Tests
+
+- Added coverage for trades `side` values (`buy`, `sell`, `null`) and missing
+  side fields to keep backward compatibility with older payloads.
+
 ## [0.15.0] — 2026-08-04
 
 ### Changed

@@ -11,7 +11,7 @@ on the subscription plan and data availability.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Literal, Optional
 
 
 class _DictAccessMixin:
@@ -1141,6 +1141,20 @@ class MarketDepth(_DictAccessMixin):
 # Live Trades
 # ---------------------------------------------------------------------------
 
+TradeSide = Literal["buy", "sell"]
+
+
+def _normalize_trade_side(value: Any) -> Optional[TradeSide]:
+    """Normalize optional trade side while preserving backward compatibility."""
+    if value is None:
+        return None
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in {"buy", "sell"}:
+            return normalized
+    return None
+
+
 @dataclass
 class TradeEvent(_DictAccessMixin):
     """A single trade print from GET /market/trades/{symbol}/ or WS trade."""
@@ -1149,7 +1163,7 @@ class TradeEvent(_DictAccessMixin):
     price: Optional[float] = None
     quantity: Optional[int] = None
     value: Optional[float] = None
-    side: Optional[str] = None
+    side: Optional[TradeSide] = None
     market_session: Optional[str] = None
     symbol: Optional[str] = None
     timestamp: Optional[str] = None
@@ -1162,7 +1176,7 @@ class TradeEvent(_DictAccessMixin):
             price=data.get("price"),
             quantity=data.get("quantity"),
             value=data.get("value"),
-            side=data.get("side"),
+            side=_normalize_trade_side(data.get("side")),
             market_session=data.get("market_session"),
             symbol=data.get("symbol"),
             timestamp=data.get("timestamp"),

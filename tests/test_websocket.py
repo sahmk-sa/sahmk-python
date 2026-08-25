@@ -1110,12 +1110,13 @@ class TestTradesWebSocketStream:
             "price": 26.2,
             "quantity": 1,
             "value": 26.2,
+            "side": "buy",
         }
         snapshot_msg = {
             "type": "trades_snapshot",
             "symbol": "2222",
             "count": 1,
-            "events": [{"price": 26.2, "quantity": 1, "value": 26.2}],
+            "events": [{"price": 26.2, "quantity": 1, "value": 26.2, "side": "sell"}],
         }
 
         class TradesWebSocket(MockWebSocket):
@@ -1156,5 +1157,72 @@ class TestTradesWebSocketStream:
 
         assert len(snapshots) == 1
         assert snapshots[0]["symbol"] == "2222"
+        assert snapshots[0]["events"][0]["side"] == "sell"
         assert len(trades) == 1
         assert trades[0]["price"] == 26.2
+        assert trades[0]["side"] == "buy"
+
+    @pytest.mark.asyncio
+    async def test_stream_trades_preserves_nullable_or_missing_side(self, mock_client):
+        """Trades WS payloads should preserve side=None and missing side fields."""
+        trades = []
+        snapshots = []
+
+        async def on_trade(data):
+            trades.append(data)
+
+        async def on_snapshot(data):
+            snapshots.append(data)
+
+        trade_msg = {
+            "type": "trade",
+            "symbol": "2222",
+            "price": 26.2,
+            "quantity": 1,
+            "value": 26.2,
+        }
+        snapshot_msg = {
+            "type": "trades_snapshot",
+            "symbol": "2222",
+            "count": 1,
+            "events": [{"price": 26.2, "quantity": 1, "value": 26.2, "side": None}],
+        }
+
+        class TradesWebSocket(MockWebSocket):
+            def __init__(self):
+                super().__init__(
+                    connect_response={
+                        "type": "connected",
+                        "channel": "trades",
+                        "limits": {
+                            "max_symbols_per_connection": 60,
+                            "max_symbols_per_call": 20,
+                        },
+                    },
+                    recv_sequence=[{"type": "subscribed", "symbols": ["2222"]}],
+                )
+                self._iter_count = 0
+
+            def __aiter__(self):
+                return self
+
+            async def __anext__(self):
+                self._iter_count += 1
+                if self._iter_count == 1:
+                    return json.dumps(snapshot_msg)
+                if self._iter_count == 2:
+                    return json.dumps(trade_msg)
+                raise StopAsyncIteration
+
+        mock_ws = TradesWebSocket()
+
+        with mock.patch("websockets.connect", return_value=mock_ws):
+            with pytest.raises(ConnectionError):
+                await mock_client._stream_trades_connection(
+                    symbols=["2222"],
+                    on_trade=on_trade,
+                    on_snapshot=on_snapshot,
+                )
+
+        assert snapshots[0]["events"][0]["side"] is None
+        assert "side" not in trades[0]

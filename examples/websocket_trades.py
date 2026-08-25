@@ -38,10 +38,11 @@ async def run_stream(stop_event):
         nonlocal trades
         trades += 1
         logger.info(
-            "trade symbol=%s price=%s qty=%s value=%s session=%s total=%d",
+            "trade symbol=%s price=%s qty=%s side=%s value=%s session=%s total=%d",
             msg.get("symbol"),
             msg.get("price"),
             msg.get("quantity"),
+            msg.get("side") or "-",
             msg.get("value"),
             msg.get("market_session"),
             trades,

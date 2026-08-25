@@ -822,6 +822,8 @@ class TestMainTradesCommand:
         captured = capsys.readouterr()
         assert "26.18" in captured.out
         assert "events" in captured.out
+        assert '"side": "buy"' in captured.out
+        assert '"side": "sell"' in captured.out
 
     @responses.activate
     def test_trades_with_limit(self, capsys, sample_trades_response, monkeypatch):
@@ -839,6 +841,34 @@ class TestMainTradesCommand:
         assert exit_code == 0
         request = responses.calls[0].request
         assert "limit=20" in request.url
+
+    @responses.activate
+    def test_trades_side_null_in_output(self, capsys, monkeypatch):
+        """Test trades output preserves nullable side as JSON null."""
+        monkeypatch.setenv("SAHMK_API_KEY", "test_key")
+        responses.add(
+            responses.GET,
+            "https://api.sahmk.sa/api/v1/market/trades/2222/",
+            json={
+                "symbol": "2222",
+                "count": 1,
+                "events": [
+                    {
+                        "event_time": "2026-07-29T11:21:23+00:00",
+                        "price": 26.18,
+                        "quantity": 1,
+                        "value": 26.18,
+                        "side": None,
+                    }
+                ],
+            },
+            status=200,
+        )
+
+        exit_code = main(["trades", "2222"])
+        assert exit_code == 0
+        captured = capsys.readouterr()
+        assert '"side": null' in captured.out
 
 
 class TestParserNewCommands:
