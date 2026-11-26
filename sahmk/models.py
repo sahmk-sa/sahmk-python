@@ -1167,11 +1167,15 @@ class TradeEvent(_DictAccessMixin):
     market_session: Optional[str] = None
     symbol: Optional[str] = None
     timestamp: Optional[str] = None
+    # Upstream exchange sequence. With the symbol and the Asia/Riyadh day of
+    # event_time it identifies a print; the number can repeat on a later day.
+    trade_seq: Optional[int] = None
     raw: Dict[str, Any] = field(default_factory=dict, repr=False)
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "TradeEvent":
         return cls(
+            trade_seq=data.get("trade_seq"),
             event_time=data.get("event_time"),
             price=data.get("price"),
             quantity=data.get("quantity"),
@@ -1206,6 +1210,35 @@ class TradesSummary(_DictAccessMixin):
 
 
 @dataclass
+class TradesPage(_DictAccessMixin):
+    """Paging block on dated GET /market/trades/{symbol}/?date=... calls."""
+
+    limit: Optional[int] = None
+    has_more: Optional[bool] = None
+    next_cursor: Optional[str] = None
+    last_trade_seq: Optional[int] = None
+    order: Optional[str] = None
+    recovery: Optional[str] = None
+    complete_official_volume: Optional[bool] = None
+    scan_capped: Optional[bool] = None
+    raw: Dict[str, Any] = field(default_factory=dict, repr=False)
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "TradesPage":
+        return cls(
+            limit=data.get("limit"),
+            has_more=data.get("has_more"),
+            next_cursor=data.get("next_cursor"),
+            last_trade_seq=data.get("last_trade_seq"),
+            order=data.get("order"),
+            recovery=data.get("recovery"),
+            complete_official_volume=data.get("complete_official_volume"),
+            scan_capped=data.get("scan_capped"),
+            raw=data,
+        )
+
+
+@dataclass
 class TradesResponse(_DictAccessMixin):
     """Response from GET /market/trades/{symbol}/ (and trades WS snapshots)."""
 
@@ -1214,11 +1247,14 @@ class TradesResponse(_DictAccessMixin):
     count: Optional[int] = None
     events: List[TradeEvent] = field(default_factory=list)
     summary: Optional[TradesSummary] = None
+    # Present only on dated (recovery) calls.
+    page: Optional[TradesPage] = None
     raw: Dict[str, Any] = field(default_factory=dict, repr=False)
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "TradesResponse":
         summary_data = data.get("summary")
+        page_data = data.get("page")
         return cls(
             symbol=data.get("symbol"),
             updated_at=data.get("updated_at"),
@@ -1229,5 +1265,6 @@ class TradesResponse(_DictAccessMixin):
                 if isinstance(summary_data, dict)
                 else None
             ),
+            page=TradesPage.from_dict(page_data) if isinstance(page_data, dict) else None,
             raw=data,
         )

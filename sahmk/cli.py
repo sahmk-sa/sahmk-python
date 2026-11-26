@@ -8,7 +8,12 @@ import json
 import os
 import sys
 
-from .client import SahmkClient, SahmkError
+from .client import (
+    HISTORICAL_INTERVAL_ALIASES,
+    HISTORICAL_INTERVALS,
+    SahmkClient,
+    SahmkError,
+)
 
 
 def _compact_arg(parser):
@@ -80,9 +85,19 @@ def _build_parser():
     historical_parser.add_argument("--from", dest="from_date", help="Start date YYYY-MM-DD.")
     historical_parser.add_argument("--to", dest="to_date", help="End date YYYY-MM-DD.")
     historical_parser.add_argument(
+        "--limit", type=int, default=None, help="Max bars to return (default 500, max 2000)."
+    )
+    historical_parser.add_argument(
+        "--offset", type=int, default=None, help="Bars to skip from the start (default 0)."
+    )
+    historical_parser.add_argument(
         "--interval",
-        choices=["1d", "1w", "1m", "30m", "60m"],
-        help='Interval: "1d", "1w", "1m", "30m", or "60m".',
+        choices=list(HISTORICAL_INTERVALS) + list(HISTORICAL_INTERVAL_ALIASES),
+        help=(
+            "Interval: 1min, 5min, 15min, 30min, 60min, 1d, 1w, 1mo "
+            "(default 1d). Legacy aliases 30m, 60m, 1m are accepted; "
+            "1m means one month, not one minute."
+        ),
     )
     _compact_arg(historical_parser)
 
@@ -203,6 +218,23 @@ def _build_parser():
         type=int,
         default=None,
         help="Max trade events to return (1-200).",
+    )
+    trades_parser.add_argument(
+        "--date",
+        default=None,
+        help="Read one Asia/Riyadh session (YYYY-MM-DD) from the recent tape, in receive order.",
+    )
+    trades_parser.add_argument(
+        "--after-seq",
+        dest="after_seq",
+        type=int,
+        default=None,
+        help="Only prints with a greater trade_seq. Requires --date.",
+    )
+    trades_parser.add_argument(
+        "--cursor",
+        default=None,
+        help="page.next_cursor from the previous page. Requires --date.",
     )
     _compact_arg(trades_parser)
 
@@ -411,6 +443,8 @@ def main(argv=None):
                 from_date=args.from_date,
                 to_date=args.to_date,
                 interval=args.interval,
+                limit=args.limit,
+                offset=args.offset,
             )
         elif args.command == "company":
             result = client.company(args.symbol)
@@ -447,7 +481,15 @@ def main(argv=None):
             _run_stream_depth(client, symbols, levels=args.levels)
             return 0
         elif args.command == "trades":
-            result = client.trades(args.symbol, limit=args.limit)
+            if (args.after_seq is not None or args.cursor) and not args.date:
+                parser.error("--date is required with --after-seq or --cursor.")
+            result = client.trades(
+                args.symbol,
+                limit=args.limit,
+                date=args.date,
+                after_seq=args.after_seq,
+                cursor=args.cursor,
+            )
         elif args.command == "stream-trades":
             symbols = [s.strip() for s in args.symbols.split(",") if s.strip()]
             if not symbols:

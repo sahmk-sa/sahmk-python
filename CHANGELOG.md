@@ -4,6 +4,34 @@ All notable changes to the `sahmk` Python SDK will be documented in this file.
 
 This project follows [Semantic Versioning](https://semver.org/).
 
+## [0.17.0] — 2026-11-26
+
+### Added
+
+- Portfolio methods: `portfolios`, `portfolio`, `create_portfolio`,
+  `update_portfolio`, `delete_portfolio`, `portfolio_transactions`,
+  `create_portfolio_transaction`, `create_portfolio_transactions` (atomic batch),
+  `reverse_portfolio_transaction`, `portfolio_summary`, `portfolio_performance`,
+  and `set_portfolio_holdings` (dry run, then apply with `plan_token`).
+- Trades session recovery: `client.trades(symbol, date=..., after_seq=..., cursor=...)`,
+  a typed `TradesPage` on `TradesResponse.page`, and `client.iter_trades(symbol, date)`
+  to walk a session. CLI: `sahmk trades --date --after-seq --cursor`.
+- `TradeEvent.trade_seq`.
+- `client.historical(..., limit=..., offset=...)` and CLI `--limit` / `--offset`.
+- `SahmkError.errors` holds per-field validation messages when the API sends them.
+
+### Changed
+
+- Historical intervals follow the API's canonical tokens: `1min`, `5min`, `15min`,
+  `30min`, `60min`, `1d`, `1w`, `1mo`. The CLI `--interval` accepts them plus the
+  legacy aliases `30m`, `60m`, and `1m` (one month). Exported as
+  `sahmk.client.HISTORICAL_INTERVALS` and `HISTORICAL_INTERVAL_ALIASES`.
+- `_request` accepts any 2xx and returns `None` for empty or 204 responses, and
+  sends JSON bodies for writes.
+- Writes (POST, PATCH, DELETE) are retried only on 429. A write that timed out or
+  got a 5xx is raised instead of being sent again. Reads keep the previous retry
+  behavior.
+
 ## [0.16.0] — 2026-08-25
 
 ### Changed

@@ -12,14 +12,15 @@ Use one client for live Tadawul quotes, market-level insights, company/fundament
 
 - **Real-time quotes** for 350+ Tadawul stocks
 - **Batch quotes** for up to 50 symbols per request
-- **Historical OHLCV** data with date-range support (`1d`, `1w`, `1m`, `30m`, `60m`)
+- **Historical and intraday OHLCV** (`1min`, `5min`, `15min`, `30min`, `60min`, `1d`, `1w`, `1mo`; plan-limited)
 - **Market overview** with index scoping (`TASI`/`NOMU`)
 - **Market depth** order book snapshots (entitlement-gated)
-- **Live trades** recent prints and real-time tape (Pro+)
+- **Live trades** recent prints, per-session recovery with cursor paging, and real-time tape (Pro+)
 - **Company directory** endpoint for symbol discovery
 - **Company/fundamental** data (plan-dependent fields)
 - **Financials, dividends, and events** endpoints (by plan)
 - **WebSocket streaming** for quotes, depth, and trades (Pro+/entitled)
+- **Portfolios**: create, record transactions, reconcile holdings, and read P&L and performance
 
 ## Installation
 
@@ -136,7 +137,8 @@ Recommended flow:
 
 ## Production Reliability
 
-- The client retries transient failures: **HTTP 429** and **5xx** errors.
+- The client retries transient failures: **HTTP 429** and **5xx** errors, and timeouts.
+- Writes (POST, PATCH, DELETE) are retried only on **429**. A write that timed out or got a 5xx may already have been applied, so it is raised instead of being sent again. Use `idempotency_key` on portfolio transactions to resend one safely.
 - Defaults: `retries=3`, `backoff_factor=0.5` (0.5s, 1s, 2s).
 - Invalid symbols, authentication failures, and plan-access errors are **not retryable**.
 
@@ -154,10 +156,14 @@ When your plan does not include an endpoint, the API returns an error response (
 Historical data availability is plan-based:
 
 - Free: no historical access
-- Starter: `1d`, `1w`, `1m`
-- Pro: Starter intervals + `60m` up to 90 days
-- Business: Starter intervals + `30m` up to 6 months + `60m` up to 1 year
-- Enterprise: Business defaults plus custom retention/interval/delivery by agreement
+- Starter: `1d`, `1w`, `1mo`
+- Pro: Starter intervals + `15min`, `30min`, `60min`, each up to 90 days
+- Business: Pro intervals + `5min` (up to 90 days); `15min` and `30min` up to 6 months; `60min` up to 1 year
+- Enterprise: custom interval access, including `1min` where enabled, by agreement
+
+Legacy aliases `30m`, `60m`, and `1m` are still accepted. `1m` means one **month**
+(`1mo`), not one minute; use `1min` for one-minute bars. Use `limit` (default 500,
+max 2000) and `offset` to page through long intraday ranges.
 
 Out-of-plan interval/range requests are returned by the API as `403 PLAN_LIMIT`.
 The SDK does not hard-block these requests client-side; it passes the API response through.
@@ -170,7 +176,8 @@ sahmk quote 2222
 sahmk market summary --index NOMU
 sahmk market gainers --limit 5 --index NOMUC
 sahmk historical 2222 --from 2026-01-01 --to 2026-01-28
-sahmk historical 2222 --from 2026-01-01 --to 2026-01-03 --interval 60m
+sahmk historical 2222 --from 2026-01-01 --to 2026-01-03 --interval 60min
+sahmk historical 2222 --from 2026-11-20 --to 2026-11-24 --interval 5min --limit 2000
 sahmk company 2222
 sahmk financials 2222
 sahmk ratios 2222 --history latest --period annual --metrics core
@@ -179,6 +186,7 @@ sahmk dividends 2222
 sahmk events --symbol 2222 --limit 5
 sahmk depth 2222 --levels 5
 sahmk trades 2222 --limit 20
+sahmk trades 2222 --date 2026-11-22 --limit 200
 sahmk stream 2222,1120
 sahmk stream-depth 2222,1120 --levels 5
 sahmk stream-trades 2222,1120
@@ -248,7 +256,7 @@ Base URL: `https://api.sahmk.sa/api/v1`
 |----------|------|-------------|
 | `GET /quote/{symbol}/` | Free | Stock quote |
 | `GET /quotes/?symbols=...` | Starter+ | Batch quotes (up to 50) |
-| `GET /historical/{symbol}/` | Starter+ | Historical OHLCV data (`1d`, `1w`, `1m`, `30m`, `60m`, plan-limited) |
+| `GET /historical/{symbol}/` | Starter+ | Historical and intraday OHLCV (`1min` … `1mo`, `limit`/`offset`, plan-limited) |
 | `GET /market/summary/` | Free | Market overview |
 | `GET /market/gainers/` | Free | Top gainers |
 | `GET /market/losers/` | Free | Top losers |
@@ -256,7 +264,7 @@ Base URL: `https://api.sahmk.sa/api/v1`
 | `GET /market/value/` | Free | Value leaders |
 | `GET /market/sectors/` | Free | Sector performance |
 | `GET /market/depth/{symbol}/` | Entitled | Market depth / order book (`levels` 1-20). [Request access](https://www.sahmk.sa/developers/dashboard/realtime-access) |
-| `GET /market/trades/{symbol}/` | Pro+ | Recent live trade prints (`limit` 1-200, optional `side`) |
+| `GET /market/trades/{symbol}/` | Pro+ | Live trade prints (`limit` 1-200; `date`/`after_seq`/`cursor` session recovery) |
 | `GET /companies/` | Free | Company directory and symbol discovery |
 | `GET /company/{symbol}/` | Free+ | Company info (tiered by plan) |
 | `GET /financials/{symbol}/` | Starter+ | Financial statements |
@@ -264,6 +272,13 @@ Base URL: `https://api.sahmk.sa/api/v1`
 | `GET /analytics/compare/` | Starter+ | Analytics comparison across companies |
 | `GET /dividends/{symbol}/` | Starter+ | Dividend history and yield |
 | `GET /events/` | Pro+ | AI-generated stock events |
+| `GET, POST /portfolios/` | Free+ | List or create portfolios |
+| `GET, PATCH, DELETE /portfolios/{id}/` | Free+ | Read, edit, or delete one portfolio |
+| `GET, POST /portfolios/{id}/transactions/` | Free+ | Ledger, or append one transaction or a batch |
+| `POST /portfolios/{id}/transactions/{tx}/reverse/` | Free+ | Reverse the latest transaction |
+| `POST /portfolios/{id}/holdings/set/` | Free+ | Reconcile holdings (dry run, then apply) |
+| `GET /portfolios/{id}/holdings/summary/` | Free+ | Cash, holdings, and P&L |
+| `GET /portfolios/{id}/performance/` | Free+ | Daily equity series |
 
 All endpoints require `X-API-Key`.
 
@@ -316,13 +331,61 @@ for event in trades.events:
 ```
 
 `event.side` is optional and may be `"buy"`, `"sell"`, or `None` depending on backend availability.
+Each print also carries `event.trade_seq`. The symbol, the Asia/Riyadh day of
+`event_time`, and `trade_seq` together identify a print.
+
+### Recovering a session
+
+Pass `date` to read one Asia/Riyadh session from the recent tape (about three days)
+in receive order. Dated calls return `trades.page`; follow `page.next_cursor` while
+`page.has_more` is true, or let `iter_trades` do it:
+
+```python
+seen = {}
+for event in client.iter_trades("2222", "2026-11-22"):
+    seen[event.trade_seq] = event  # the tape can repeat a print; keep the later copy
+```
+
+`after_seq` returns only prints with a greater `trade_seq`. It requires `date` and is
+a filter, not a cursor. This is the recent tape, not official session volume
+(`page.complete_official_volume` is false).
 
 CLI:
 
 ```bash
 sahmk trades 2222 --limit 20
+sahmk trades 2222 --date 2026-11-22 --after-seq 204505
 sahmk stream-trades 2222,1120
 ```
+
+## Portfolios
+
+Portfolio methods return the API's JSON as plain dicts. Every plan can use them;
+limits are Free 1 portfolio and 30 performance days, Starter 3 and 365, Pro 10 and
+1095, Business 50 with no day cap, Enterprise by agreement.
+
+```python
+pf = client.create_portfolio("Core")
+client.create_portfolio_transaction(pf["id"], "deposit", 10000, idempotency_key="dep-1")
+client.create_portfolio_transaction(
+    pf["id"], "buy", 2660, symbol="2222", quantity=100, unit_price_sar=26.6,
+    idempotency_key="buy-2222-1",
+)
+print(client.portfolio_summary(pf["id"]))
+print(client.portfolio_performance(pf["id"], days=30))
+
+# Reconcile to target holdings: dry run first, then apply with the plan token.
+target = [{"symbol": "2222", "quantity": 150, "avg_cost_sar": 26.4}]
+preview = client.set_portfolio_holdings(pf["id"], target, scope="partial", cash_policy="auto_fund")
+client.set_portfolio_holdings(
+    pf["id"], target, scope="partial", cash_policy="auto_fund",
+    dry_run=False, plan_token=preview["plan"]["plan_token"],
+)
+```
+
+The ledger is append-only by `executed_at`; a backdated entry is rejected. Only the
+latest transaction can be reversed (`reverse_portfolio_transaction`). For an atomic
+batch, use `create_portfolio_transactions(portfolio_id, transactions, batch_idempotency_key)`.
 
 ## WebSocket Streaming (Pro+)
 

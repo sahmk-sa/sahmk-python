@@ -843,6 +843,50 @@ class TestMainTradesCommand:
         assert "limit=20" in request.url
 
     @responses.activate
+    def test_trades_recovery_flags(self, capsys, sample_trades_response, monkeypatch):
+        """Test trades command with --date/--after-seq/--cursor."""
+        monkeypatch.setenv("SAHMK_API_KEY", "test_key")
+        responses.add(
+            responses.GET,
+            "https://api.sahmk.sa/api/v1/market/trades/2222/",
+            json=sample_trades_response,
+            status=200,
+        )
+
+        exit_code = main(
+            ["trades", "2222", "--date", "2026-11-22", "--after-seq", "204505", "--cursor", "abc"]
+        )
+
+        assert exit_code == 0
+        url = responses.calls[0].request.url
+        assert "date=2026-11-22" in url
+        assert "after_seq=204505" in url
+        assert "cursor=abc" in url
+
+    def test_trades_after_seq_requires_date(self, monkeypatch):
+        """Test --after-seq without --date is rejected before any request."""
+        monkeypatch.setenv("SAHMK_API_KEY", "test_key")
+        with pytest.raises(SystemExit):
+            main(["trades", "2222", "--after-seq", "5"])
+
+    @responses.activate
+    @pytest.mark.parametrize("interval", ["1min", "15min", "1mo", "60m"])
+    def test_historical_accepts_new_intervals(self, capsys, interval, monkeypatch):
+        """Test historical --interval accepts canonical tokens and legacy aliases."""
+        monkeypatch.setenv("SAHMK_API_KEY", "test_key")
+        responses.add(
+            responses.GET,
+            "https://api.sahmk.sa/api/v1/historical/2222/",
+            json={"symbol": "2222", "data": []},
+            status=200,
+        )
+
+        exit_code = main(["historical", "2222", "--interval", interval])
+
+        assert exit_code == 0
+        assert f"interval={interval}" in responses.calls[0].request.url
+
+    @responses.activate
     def test_trades_side_null_in_output(self, capsys, monkeypatch):
         """Test trades output preserves nullable side as JSON null."""
         monkeypatch.setenv("SAHMK_API_KEY", "test_key")

@@ -8,6 +8,7 @@ https://sahmk.sa/developers/docs
 import json
 import logging
 import random
+import re
 import time
 
 import requests
@@ -29,16 +30,25 @@ _DEPTH_LEVELS_MIN = 1
 _DEPTH_LEVELS_MAX = 20
 _TRADES_LIMIT_MIN = 1
 _TRADES_LIMIT_MAX = 200
+_TRADES_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+# Canonical historical intervals, then the legacy aliases the API still accepts.
+# Note "1m" is one MONTH (alias of "1mo"); one-minute bars are "1min".
+HISTORICAL_INTERVALS = ("1min", "5min", "15min", "30min", "60min", "1d", "1w", "1mo")
+HISTORICAL_INTERVAL_ALIASES = {"30m": "30min", "60m": "60min", "1m": "1mo"}
 
 
 class SahmkError(Exception):
     """Base exception for SAHMK API errors."""
 
-    def __init__(self, message, status_code=None, error_code=None, response=None):
+    def __init__(
+        self, message, status_code=None, error_code=None, response=None, errors=None
+    ):
         super().__init__(message)
         self.status_code = status_code
         self.error_code = error_code
         self.response = response
+        # Per-field validation messages, when the API sends them (error.errors).
+        self.errors = errors
 
 
 class SahmkRateLimitError(SahmkError):
@@ -198,19 +208,27 @@ class SahmkClient:
         self.session = requests.Session()
         self.session.headers.update({"X-API-Key": api_key})
 
-    def _request(self, method, endpoint, params=None):
-        """Make an API request with automatic retries for transient failures."""
+    def _request(self, method, endpoint, params=None, json_body=None):
+        """Make an API request with automatic retries for transient failures.
+
+        Reads (GET) retry on 429, 5xx, and timeouts. Writes retry only on 429,
+        which the API returns before running the handler. A write that timed
+        out or hit a 5xx may already have been applied, so it is raised to the
+        caller instead of being sent again.
+        """
         url = f"{self.base_url}{endpoint}"
         last_exc = None
+        is_read = str(method).upper() == "GET"
+        request_kwargs = {"params": params, "timeout": self.timeout}
+        if json_body is not None:
+            request_kwargs["json"] = json_body
 
         for attempt in range(1 + self.retries):
             try:
-                response = self.session.request(
-                    method, url, params=params, timeout=self.timeout
-                )
+                response = self.session.request(method, url, **request_kwargs)
             except requests.Timeout as e:
                 last_exc = SahmkError(f"Request timed out: {e}")
-                if self.retry_on_timeout and attempt < self.retries:
+                if is_read and self.retry_on_timeout and attempt < self.retries:
                     self._backoff(attempt)
                     continue
                 raise last_exc
@@ -233,7 +251,7 @@ class SahmkClient:
 
             if response.status_code in _RETRIABLE_STATUS_CODES:
                 last_exc = self._build_api_error(response)
-                if attempt < self.retries:
+                if is_read and attempt < self.retries:
                     wait = self.backoff_factor * (2 ** attempt)
                     logger.info(
                         "Server error (%d), retrying in %.1fs (attempt %d/%d)...",
@@ -246,8 +264,11 @@ class SahmkClient:
                     continue
                 raise last_exc
 
-            if response.status_code != 200:
+            if not 200 <= response.status_code < 300:
                 raise self._build_api_error(response)
+
+            if response.status_code == 204 or not response.content:
+                return None
 
             try:
                 return response.json()
@@ -305,14 +326,21 @@ class SahmkClient:
     def _build_api_error(response):
         """Build a SahmkError from a non-200 response."""
         details = {}
+        field_errors = None
         try:
             body = response.json()
-            err = body.get("error", {})
-            code = err.get("code", "UNKNOWN")
-            message = err.get("message", response.text)
+            err = body.get("error")
+            if not isinstance(err, dict):
+                # Portfolio endpoints send the error at the top level:
+                # {"success": false, "code": ..., "message"?: ..., "errors"?: {...}}
+                err = body if "code" in body else {}
+            code = err.get("code") or "UNKNOWN"
             if isinstance(err.get("details"), dict):
                 details = err.get("details")
-        except (ValueError, KeyError):
+            if isinstance(err.get("errors"), (dict, list)) and err.get("errors"):
+                field_errors = err.get("errors")
+            message = err.get("message") or (code if field_errors else response.text)
+        except (ValueError, KeyError, AttributeError):
             code = "UNKNOWN"
             message = response.text
         if response.status_code == 400 and code == "INVALID_INDEX":
@@ -345,11 +373,14 @@ class SahmkClient:
                 status_code=response.status_code,
                 error_code=code,
             )
+        if field_errors is not None:
+            message = f"{message} {field_errors}" if message else str(field_errors)
         return SahmkError(
             f"API error {response.status_code}: {message}",
             status_code=response.status_code,
             error_code=code,
             response=response,
+            errors=field_errors,
         )
 
     def _rate_limit_wait(self, response, attempt):
@@ -480,7 +511,9 @@ class SahmkClient:
     # Historical
     # -------------------------------------------------------------------------
 
-    def historical(self, symbol, from_date=None, to_date=None, interval=None):
+    def historical(
+        self, symbol, from_date=None, to_date=None, interval=None, limit=None, offset=None
+    ):
         """
         Get historical OHLCV data (Starter+ plan).
 
@@ -488,7 +521,14 @@ class SahmkClient:
             symbol: Stock symbol
             from_date: Start date YYYY-MM-DD (default: 30 days ago)
             to_date: End date YYYY-MM-DD (default: today)
-            interval: "1d", "1w", "1m", "30m", or "60m" (default: "1d")
+            interval: One of "1min", "5min", "15min", "30min", "60min", "1d",
+                      "1w", "1mo" (default: "1d"). Legacy aliases "30m",
+                      "60m", and "1m" are still accepted; "1m" means one
+                      month, not one minute. Intraday intervals and date
+                      windows depend on your plan.
+            limit: Optional max bars to return (backend default 500, max 2000)
+            offset: Optional bars to skip from the start of the
+                    chronologically ordered result (default 0)
 
         Returns:
             HistoricalResponse with .data list of OHLCV objects
@@ -501,6 +541,12 @@ class SahmkClient:
             params["to"] = to_date
         if interval:
             params["interval"] = interval
+        if limit is not None:
+            params["limit"] = self._positive_int(limit, "limit")
+        if offset is not None:
+            if isinstance(offset, bool) or not isinstance(offset, int) or offset < 0:
+                raise ValueError("offset must be a non-negative integer")
+            params["offset"] = offset
         data = self._request("GET", f"/historical/{symbol}/", params=params)
         return HistoricalResponse.from_dict(data)
 
@@ -650,29 +696,73 @@ class SahmkClient:
         )
         return MarketDepth.from_dict(data)
 
-    def trades(self, symbol, limit=None):
+    def trades(self, symbol, limit=None, date=None, after_seq=None, cursor=None):
         """
-        Get recent live trade prints for a symbol (Pro+).
+        Get live trade prints for a symbol (Pro+).
+
+        Without ``date``, returns the most recent prints, newest first.
+        With ``date``, reads one Asia/Riyadh session from the recent tape
+        (about three days) in receive order and returns a ``page`` object.
+        Walk a session by following ``page.next_cursor`` until
+        ``page.has_more`` is false, or use :meth:`iter_trades`.
 
         Args:
             symbol: Stock symbol (e.g., "2222")
-            limit: Optional max events to return (1-200, newest first).
-                   Backend default is 50.
+            limit: Optional page size (1-200). Backend default is 50.
+            date: Optional session date "YYYY-MM-DD" (Asia/Riyadh).
+            after_seq: Optional integer; only prints with a greater
+                       ``trade_seq``. Requires ``date``. This is a filter,
+                       not a pagination cursor.
+            cursor: Optional opaque ``page.next_cursor`` from the previous
+                    page. Requires ``date``.
 
         Returns:
-            TradesResponse with .events list and .summary
+            TradesResponse with .events, .summary, and (dated calls) .page
         """
         from .models import TradesResponse
         params = {}
         normalized_limit = self._normalize_trades_limit(limit)
         if normalized_limit is not None:
             params["limit"] = normalized_limit
+        params.update(self._trades_recovery_params(date, after_seq, cursor))
         data = self._request(
             "GET",
             f"/market/trades/{symbol}/",
             params=params or None,
         )
         return TradesResponse.from_dict(data)
+
+    def iter_trades(self, symbol, date, limit=_TRADES_LIMIT_MAX, max_pages=None):
+        """
+        Yield every trade print for one Asia/Riyadh session, page by page.
+
+        Follows ``page.next_cursor`` until ``page.has_more`` is false. The
+        tape can repeat a print; dedupe on (symbol, date, ``trade_seq``) and
+        keep the later copy. This is the recent tape (about three days), not
+        official session volume.
+
+        Args:
+            symbol: Stock symbol (e.g., "2222")
+            date: Session date "YYYY-MM-DD" (Asia/Riyadh)
+            limit: Page size (1-200, default 200)
+            max_pages: Optional safety cap on the number of pages fetched
+
+        Yields:
+            TradeEvent objects in receive order
+        """
+        cursor = None
+        pages = 0
+        while True:
+            response = self.trades(symbol, limit=limit, date=date, cursor=cursor)
+            pages += 1
+            for event in response.events:
+                yield event
+            page = response.page
+            if page is None or not page.has_more or not page.next_cursor:
+                return
+            if max_pages is not None and pages >= max_pages:
+                return
+            cursor = page.next_cursor
 
     # -------------------------------------------------------------------------
     # Company Data
@@ -854,6 +944,294 @@ class SahmkClient:
             params["limit"] = limit
         data = self._request("GET", "/events/", params=params or None)
         return EventsResponse.from_dict(data)
+
+    # -------------------------------------------------------------------------
+    # Portfolios
+    # -------------------------------------------------------------------------
+    #
+    # Portfolio methods return the API's JSON as plain dicts. Writes are never
+    # retried after a timeout or 5xx (see _request); pass an idempotency_key
+    # on transactions so you can safely resend one yourself.
+
+    @staticmethod
+    def _positive_int(value, name):
+        if isinstance(value, bool):
+            raise ValueError(f"{name} must be a positive integer")
+        try:
+            normalized = int(value)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"{name} must be a positive integer") from exc
+        if normalized < 1:
+            raise ValueError(f"{name} must be a positive integer")
+        return normalized
+
+    @staticmethod
+    def _drop_none(fields):
+        return {key: value for key, value in fields.items() if value is not None}
+
+    def portfolios(self, workspace_id=None):
+        """
+        List your portfolios, most recently updated first.
+
+        Args:
+            workspace_id: Optional workspace id to filter by
+
+        Returns:
+            dict with "count" and "portfolios"
+        """
+        params = None
+        if workspace_id is not None:
+            params = {"workspace_id": self._positive_int(workspace_id, "workspace_id")}
+        return self._request("GET", "/portfolios/", params=params)
+
+    def portfolio(self, portfolio_id):
+        """Get one portfolio by id."""
+        pid = self._positive_int(portfolio_id, "portfolio_id")
+        return self._request("GET", f"/portfolios/{pid}/")
+
+    def create_portfolio(self, name, description=None, workspace=None, metadata=None):
+        """
+        Create a portfolio. Names must be unique per developer.
+
+        Args:
+            name: Portfolio name
+            description: Optional description
+            workspace: Optional workspace id to link
+            metadata: Optional dict of your own fields
+
+        Returns:
+            dict: the created portfolio
+        """
+        name = str(name or "").strip()
+        if not name:
+            raise ValueError("name is required")
+        body = self._drop_none(
+            {
+                "name": name,
+                "description": description,
+                "workspace": workspace,
+                "metadata": metadata,
+            }
+        )
+        return self._request("POST", "/portfolios/", json_body=body)
+
+    def update_portfolio(
+        self, portfolio_id, name=None, description=None, workspace=None, metadata=None
+    ):
+        """Rename or edit one portfolio. Only the fields you pass are changed."""
+        pid = self._positive_int(portfolio_id, "portfolio_id")
+        body = self._drop_none(
+            {
+                "name": name,
+                "description": description,
+                "workspace": workspace,
+                "metadata": metadata,
+            }
+        )
+        if not body:
+            raise ValueError("Pass at least one field to update")
+        return self._request("PATCH", f"/portfolios/{pid}/", json_body=body)
+
+    def delete_portfolio(self, portfolio_id):
+        """Delete one portfolio and its transactions. Returns None."""
+        pid = self._positive_int(portfolio_id, "portfolio_id")
+        return self._request("DELETE", f"/portfolios/{pid}/")
+
+    def portfolio_transactions(self, portfolio_id):
+        """
+        List a portfolio's full ledger, newest first.
+
+        Returns:
+            dict with "count" and "transactions"
+        """
+        pid = self._positive_int(portfolio_id, "portfolio_id")
+        return self._request("GET", f"/portfolios/{pid}/transactions/")
+
+    def create_portfolio_transaction(
+        self,
+        portfolio_id,
+        transaction_type,
+        amount_sar,
+        symbol=None,
+        quantity=None,
+        unit_price_sar=None,
+        fee_sar=None,
+        executed_at=None,
+        notes=None,
+        metadata=None,
+        idempotency_key=None,
+    ):
+        """
+        Append one transaction to a portfolio ledger.
+
+        The ledger is append-only by ``executed_at``: an entry dated before the
+        latest one is rejected.
+
+        Args:
+            portfolio_id: Portfolio id
+            transaction_type: "deposit", "buy", "sell", "withdrawal",
+                              "dividend", or "fee"
+            amount_sar: Amount in SAR
+            symbol: Stock symbol (buy, sell, dividend)
+            quantity: Share quantity (buy, sell)
+            unit_price_sar: Price per share in SAR (buy, sell)
+            fee_sar: Optional fee in SAR
+            executed_at: Optional ISO-8601 timestamp
+            notes: Optional note
+            metadata: Optional dict of your own fields
+            idempotency_key: Optional key; resending the same key does not
+                             create a second transaction
+
+        Returns:
+            dict: the created transaction
+        """
+        pid = self._positive_int(portfolio_id, "portfolio_id")
+        transaction_type = str(transaction_type or "").strip().lower()
+        if not transaction_type:
+            raise ValueError("transaction_type is required")
+        if amount_sar is None:
+            raise ValueError("amount_sar is required")
+        body = self._drop_none(
+            {
+                "transaction_type": transaction_type,
+                "amount_sar": amount_sar,
+                "symbol": symbol,
+                "quantity": quantity,
+                "unit_price_sar": unit_price_sar,
+                "fee_sar": fee_sar,
+                "executed_at": executed_at,
+                "notes": notes,
+                "metadata": metadata,
+                "idempotency_key": idempotency_key,
+            }
+        )
+        return self._request(
+            "POST", f"/portfolios/{pid}/transactions/", json_body=body
+        )
+
+    def create_portfolio_transactions(
+        self, portfolio_id, transactions, batch_idempotency_key
+    ):
+        """
+        Append several transactions as one atomic batch.
+
+        Args:
+            portfolio_id: Portfolio id
+            transactions: List of transaction dicts (same fields as
+                          :meth:`create_portfolio_transaction`; each needs
+                          "transaction_type" and "amount_sar")
+            batch_idempotency_key: Required key for the whole batch
+
+        Returns:
+            dict: the batch result
+        """
+        pid = self._positive_int(portfolio_id, "portfolio_id")
+        if not isinstance(transactions, list) or not transactions:
+            raise ValueError("transactions must be a non-empty list")
+        batch_key = str(batch_idempotency_key or "").strip()
+        if not batch_key:
+            raise ValueError("batch_idempotency_key is required")
+        body = {"transactions": transactions, "batch_idempotency_key": batch_key}
+        return self._request(
+            "POST", f"/portfolios/{pid}/transactions/", json_body=body
+        )
+
+    def reverse_portfolio_transaction(
+        self, portfolio_id, transaction_id, notes=None, metadata=None
+    ):
+        """
+        Reverse a transaction. Only the portfolio's latest transaction can be
+        reversed.
+
+        Returns:
+            dict: the reversal transaction
+        """
+        pid = self._positive_int(portfolio_id, "portfolio_id")
+        tid = self._positive_int(transaction_id, "transaction_id")
+        body = self._drop_none({"notes": notes, "metadata": metadata})
+        return self._request(
+            "POST",
+            f"/portfolios/{pid}/transactions/{tid}/reverse/",
+            json_body=body,
+        )
+
+    def portfolio_summary(self, portfolio_id):
+        """Get cash, holdings, and P&L for one portfolio."""
+        pid = self._positive_int(portfolio_id, "portfolio_id")
+        return self._request("GET", f"/portfolios/{pid}/holdings/summary/")
+
+    def portfolio_performance(self, portfolio_id, days=None):
+        """
+        Get a portfolio's daily equity series.
+
+        Args:
+            portfolio_id: Portfolio id
+            days: Optional window in days (backend default: 30)
+        """
+        pid = self._positive_int(portfolio_id, "portfolio_id")
+        params = None
+        if days is not None:
+            params = {"days": self._positive_int(days, "days")}
+        return self._request("GET", f"/portfolios/{pid}/performance/", params=params)
+
+    def set_portfolio_holdings(
+        self,
+        portfolio_id,
+        holdings,
+        scope,
+        cash_policy,
+        dry_run=True,
+        plan_token=None,
+        expected_latest_transaction_id=None,
+    ):
+        """
+        Reconcile a portfolio to target holdings (dry-run, then apply).
+
+        Call with ``dry_run=True`` (the default) to get a plan and its
+        ``plan_token``. Then call again with ``dry_run=False`` and that
+        ``plan_token`` to apply it. Applying writes ledger transactions.
+
+        Args:
+            portfolio_id: Portfolio id
+            holdings: List of {"symbol", "quantity", "avg_cost_sar"} dicts
+            scope: "full" or "partial"
+            cash_policy: "auto_fund" (existing cash is used first, only the
+                         shortfall is auto-deposited; only cash released by the
+                         plan is auto-withdrawn) or "require_cash" (no automatic
+                         deposits or withdrawals; blocked if cash would go
+                         negative)
+            dry_run: True to preview, False to apply (default: True)
+            plan_token: Token from the dry run; required to apply
+            expected_latest_transaction_id: Optional guard; apply fails if the
+                                            ledger moved since
+
+        Returns:
+            dict with "success", "dry_run", and the plan or "result"
+        """
+        pid = self._positive_int(portfolio_id, "portfolio_id")
+        if not isinstance(holdings, list):
+            raise ValueError("holdings must be a list")
+        if scope not in {"full", "partial"}:
+            raise ValueError('scope must be "full" or "partial"')
+        if cash_policy not in {"auto_fund", "require_cash"}:
+            raise ValueError('cash_policy must be "auto_fund" or "require_cash"')
+        if not dry_run and not plan_token:
+            raise ValueError("plan_token from a dry run is required to apply")
+        body = {
+            "holdings": holdings,
+            "scope": scope,
+            "cash_policy": cash_policy,
+            "dry_run": bool(dry_run),
+        }
+        if plan_token:
+            body["plan_token"] = plan_token
+        if expected_latest_transaction_id is not None:
+            body["expected_latest_transaction_id"] = self._positive_int(
+                expected_latest_transaction_id, "expected_latest_transaction_id"
+            )
+        return self._request(
+            "POST", f"/portfolios/{pid}/holdings/set/", json_body=body
+        )
 
     # -------------------------------------------------------------------------
     # WebSocket Streaming (Pro+ plan)
@@ -1606,6 +1984,33 @@ class SahmkClient:
                 f"limit must be between {_TRADES_LIMIT_MIN} and {_TRADES_LIMIT_MAX}"
             )
         return normalized
+
+    @staticmethod
+    def _trades_recovery_params(date=None, after_seq=None, cursor=None):
+        """Validate the dated trades recovery params (date/after_seq/cursor)."""
+        params = {}
+        if date is not None:
+            date = str(date).strip()
+            if not _TRADES_DATE_RE.match(date):
+                raise ValueError("date must be YYYY-MM-DD (Asia/Riyadh)")
+            params["date"] = date
+        if after_seq is not None:
+            if isinstance(after_seq, bool):
+                raise ValueError("after_seq must be a non-negative integer")
+            try:
+                normalized_seq = int(after_seq)
+            except (TypeError, ValueError) as exc:
+                raise ValueError("after_seq must be a non-negative integer") from exc
+            if normalized_seq < 0:
+                raise ValueError("after_seq must be a non-negative integer")
+            params["after_seq"] = normalized_seq
+        if cursor is not None:
+            cursor = str(cursor).strip()
+            if cursor:
+                params["cursor"] = cursor
+        if ("after_seq" in params or "cursor" in params) and "date" not in params:
+            raise ValueError("date (YYYY-MM-DD, Asia/Riyadh) is required with after_seq or cursor")
+        return params
 
     @staticmethod
     def _jittered_reconnect_delay(delay, max_reconnect_delay):
