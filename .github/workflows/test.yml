@@ -9,10 +9,14 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    # ubuntu-latest (26.04) has no Python 3.9 build, so 3.9 runs on 24.04.
+    runs-on: ${{ matrix.os || 'ubuntu-latest' }}
     strategy:
       matrix:
         python-version: ["3.9", "3.10", "3.11", "3.12"]
+        include:
+          - python-version: "3.9"
+            os: ubuntu-24.04
 
     steps:
       - name: Checkout repository
