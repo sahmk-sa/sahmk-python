@@ -4,6 +4,19 @@ All notable changes to the `sahmk` Python SDK will be documented in this file.
 
 This project follows [Semantic Versioning](https://semver.org/).
 
+## [0.17.1] — 2026-11-26
+
+### Added
+
+- `Quote.trade_count`, `Quote.bid_size`, `Quote.ask_size`.
+- `BatchQuote.value` and `BatchQuote.trade_count`.
+- `OHLCV.trade_count` (daily, weekly, monthly and intraday bars). `number_of_trades`
+  stays as the older name and carries the same value.
+- `MarketSummary.value` and `MarketSummary.trade_count`.
+
+All of these were already in the API response and reachable through `.raw` or
+`obj["field"]`; they are now typed attributes. `None` means the count is not available.
+
 ## [0.17.0] — 2026-11-26
 
 ### Added

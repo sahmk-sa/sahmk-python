@@ -127,8 +127,11 @@ class Quote(_DictAccessMixin):
     previous_close: Optional[float] = None
     volume: Optional[int] = None
     value: Optional[float] = None
+    trade_count: Optional[int] = None
     bid: Optional[float] = None
     ask: Optional[float] = None
+    bid_size: Optional[int] = None
+    ask_size: Optional[int] = None
     liquidity: Optional[Liquidity] = None
     updated_at: Optional[str] = None
     is_delayed: Optional[bool] = None
@@ -186,8 +189,11 @@ class Quote(_DictAccessMixin):
             previous_close=data.get("previous_close"),
             volume=data.get("volume"),
             value=data.get("value"),
+            trade_count=data.get("trade_count"),
             bid=data.get("bid"),
             ask=data.get("ask"),
+            bid_size=data.get("bid_size"),
+            ask_size=data.get("ask_size"),
             liquidity=liq,
             updated_at=data.get("updated_at"),
             is_delayed=data.get("is_delayed"),
@@ -209,6 +215,8 @@ class BatchQuote(_DictAccessMixin):
     change: Optional[float] = None
     change_percent: Optional[float] = None
     volume: Optional[int] = None
+    value: Optional[float] = None
+    trade_count: Optional[int] = None
     net_liquidity: Optional[float] = None
     updated_at: Optional[str] = None
     is_delayed: Optional[bool] = None
@@ -259,6 +267,8 @@ class BatchQuote(_DictAccessMixin):
             change=data.get("change"),
             change_percent=data.get("change_percent"),
             volume=data.get("volume"),
+            value=data.get("value"),
+            trade_count=data.get("trade_count"),
             net_liquidity=data.get("net_liquidity"),
             updated_at=data.get("updated_at"),
             is_delayed=data.get("is_delayed"),
@@ -349,13 +359,20 @@ class OHLCV(_DictAccessMixin):
     volume: Optional[int] = None
     adjusted_close: Optional[float] = None
     turnover: Optional[float] = None
-    number_of_trades: Optional[int] = None
+    trade_count: Optional[int] = None
+    number_of_trades: Optional[int] = None  # older name; same value as trade_count
     is_final: Optional[bool] = None
     partial: Optional[bool] = None
     raw: Dict[str, Any] = field(default_factory=dict, repr=False)
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "OHLCV":
+        trade_count = data.get("trade_count")
+        if trade_count is None:
+            trade_count = data.get("number_of_trades")
+        number_of_trades = data.get("number_of_trades")
+        if number_of_trades is None:
+            number_of_trades = trade_count
         return cls(
             date=data.get("date"),
             open=data.get("open"),
@@ -365,7 +382,8 @@ class OHLCV(_DictAccessMixin):
             volume=data.get("volume"),
             adjusted_close=data.get("adjusted_close"),
             turnover=data.get("turnover"),
-            number_of_trades=data.get("number_of_trades"),
+            trade_count=trade_count,
+            number_of_trades=number_of_trades,
             is_final=data.get("is_final"),
             partial=data.get("partial"),
             raw=data,
@@ -441,6 +459,8 @@ class MarketSummary(_DictAccessMixin):
     index_change: Optional[float] = None
     index_change_percent: Optional[float] = None
     total_volume: Optional[int] = None
+    value: Optional[float] = None
+    trade_count: Optional[int] = None
     advancing: Optional[int] = None
     declining: Optional[int] = None
     unchanged: Optional[int] = None
@@ -457,6 +477,8 @@ class MarketSummary(_DictAccessMixin):
             index_change=data.get("index_change"),
             index_change_percent=data.get("index_change_percent"),
             total_volume=data.get("total_volume"),
+            value=data.get("value"),
+            trade_count=data.get("trade_count"),
             advancing=data.get("advancing"),
             declining=data.get("declining"),
             unchanged=data.get("unchanged"),
